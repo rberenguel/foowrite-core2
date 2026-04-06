@@ -9,13 +9,18 @@
 #include "lgfx_config.h"
 #include "key_queue.h"
 #include "ble_hid_host.h"
+#include "output.hpp"
+#include "editor.h"
+#include "editor_mode.h"
 
 static const char *TAG = "main";
 
 // Shared queue — BLE writes, editor reads
 QueueHandle_t g_key_queue = NULL;
 
-static LGFX display;
+static LGFX   display;
+static Output g_output;
+static Editor g_editor;
 
 // Status updated from BLE task, read from main loop
 static std::atomic<ble_hid_status_t> g_ble_status{BLE_HID_SCANNING};
@@ -43,12 +48,6 @@ static void draw_scanning_screen(void) {
     display.print("(pair any BLE keyboard)");
 }
 
-// Cursor position for the key echo area
-static int32_t s_echo_x = 10;
-static int32_t s_echo_y = 10;
-static const int32_t ECHO_LINE_H = 20;
-static const int32_t ECHO_MARGIN = 10;
-
 static void draw_connected_screen(void) {
     display.fillScreen(TFT_DARKGREEN);
     display.setFont(&fonts::FreeSansBold12pt7b);
@@ -64,31 +63,7 @@ static void draw_connected_screen(void) {
     vTaskDelay(pdMS_TO_TICKS(800));
 
     display.fillScreen(TFT_BLACK);
-    s_echo_x = ECHO_MARGIN;
-    s_echo_y = ECHO_MARGIN;
-}
-
-static void echo_key(const key_event_t &evt) {
-    // Show raw HID keycode as hex — keymap translation comes with the editor
-    char buf[8];
-    snprintf(buf, sizeof(buf), "%02X ", evt.keycode);
-
-    display.setFont(&fonts::DejaVu18);
-    display.setTextColor(TFT_GREEN, TFT_BLACK);
-    display.setCursor(s_echo_x, s_echo_y);
-    display.print(buf);
-
-    s_echo_x += display.textWidth(buf);
-    if (s_echo_x > display.width() - 40) {
-        s_echo_x = ECHO_MARGIN;
-        s_echo_y += ECHO_LINE_H;
-        if (s_echo_y > display.height() - ECHO_LINE_H) {
-            // Scroll: clear and start over
-            display.fillScreen(TFT_BLACK);
-            s_echo_x = ECHO_MARGIN;
-            s_echo_y = ECHO_MARGIN;
-        }
-    }
+    g_editor.Refresh();
 }
 
 // ---------------------------------------------------------------------------
@@ -108,11 +83,14 @@ extern "C" void app_main(void) {
     // 3. Key event queue
     g_key_queue = xQueueCreate(KEY_QUEUE_DEPTH, sizeof(key_event_t));
 
-    // 4. BLE — scanning starts immediately on Core 0
+    // 4. Editor
+    g_editor.Init(&g_output);
+
+    // 5. BLE — scanning starts immediately on Core 0
     draw_scanning_screen();
     ble_hid_init(g_key_queue, on_ble_status);
 
-    // 5. Main loop (Core 1) — will become the editor loop
+    // 6. Main loop (Core 1) — editor loop
     ble_hid_status_t last_status = BLE_HID_SCANNING;
 
     while (true) {
@@ -121,22 +99,20 @@ extern "C" void app_main(void) {
         // Update screen on status change
         if (status != last_status) {
             if (status == BLE_HID_CONNECTED) {
+                g_editor.ProcessEvent(EV_BT_ON);
                 draw_connected_screen();
             } else {
+                g_editor.ProcessEvent(EV_BT_OFF);
                 draw_scanning_screen();
             }
             last_status = status;
         }
 
-        // Drain the key queue and echo raw keycodes to screen
+        // Feed queued keypresses to the editor
         key_event_t evt;
         while (xQueueReceive(g_key_queue, &evt, pdMS_TO_TICKS(50)) == pdTRUE) {
-            ESP_LOGI(TAG, "Key: 0x%02X shift=%d ctrl=%d alt=%d meta=%d",
-                     evt.keycode, evt.modifiers.shift, evt.modifiers.ctrl,
-                     evt.modifiers.alt, evt.modifiers.meta);
-            if (last_status == BLE_HID_CONNECTED) {
-                echo_key(evt);
-            }
+            bool batched = uxQueueMessagesWaiting(g_key_queue) > 0;
+            g_editor.ProcessKey(evt.keycode, &evt.modifiers, batched);
         }
     }
 }

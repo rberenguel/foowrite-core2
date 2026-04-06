@@ -1,17 +1,9 @@
 #pragma once
 
 #include <stdint.h>
-#include <stdbool.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
-
-// Key modifiers — mirrors foowrite's KeyModifiers
-typedef struct {
-    bool shift;
-    bool ctrl;
-    bool meta;
-    bool alt;
-} KeyModifiers;
+#include "keymap.h"  // KeyModifiers defined there
 
 // One keypress event passed from BLE task (Core 0) to editor task (Core 1)
 typedef struct {

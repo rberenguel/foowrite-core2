@@ -3,6 +3,9 @@ idf_component_register(
         "main.cpp"
         "axp192.cpp"
         "ble_hid_host.cpp"
+        "keymap.cpp"
+        "output.cpp"
+        "editor.cpp"
     INCLUDE_DIRS "."
     REQUIRES
         driver
