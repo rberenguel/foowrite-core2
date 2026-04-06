@@ -5,31 +5,21 @@ What follows is porting the editor from `../foowrite` and wiring everything toge
 
 ---
 
-## 1. Keymap (fast, no dependencies)
+## 1. Keymap ✅
 
-Port `src/layout.h` and `src/pico/layout.c` from foowrite directly into `main/`.
-- `layout.h` — HID keycode defines (already standard, copy as-is)
-- `layout.c` → `keymap.cpp` — Colemak tables + `get_char_from_key(keycode, modifiers)`
-
-Add a `USE_QWERTY` CMake option mirroring foowrite, defaulting to Colemak.
+Ported as `main/keymap.h` + `main/keymap.cpp`.
+- Both Colemak and QWERTY tables compiled in; runtime switch via `g_use_qwerty` bool (default Colemak)
+- `KeyModifiers` consolidated here; `key_queue.h` includes `keymap.h`
 
 ---
 
-## 2. Editor core
+## 2. Editor core ✅
 
-Port `src/editor.cc` and `src/editor.h` from foowrite.
-- Replace Pico SDK includes with standard C++ / ESP-IDF equivalents (mostly none needed)
-- The `Output` abstract interface (`src/output.hpp`) comes along unchanged
-- `EditorMode` enum (`src/editor_mode.h`) — copy as-is
-- `screendiffer.cc` — bring along, may be useful for the display layer
-
-The editor takes `char` input via `ProcessKey()`. The main loop on Core 1 will:
-```
-xQueueReceive(g_key_queue, &evt, portMAX_DELAY)  →  get_char_from_key()  →  editor.ProcessKey()
-```
-
-Batching: if `uxQueueMessagesWaiting(g_key_queue) > 1`, pass `batched=true` to suppress
-redraws mid-burst (mirrors foowrite's `queue_get_level` trick).
+Ported as `main/editor.h` + `main/editor.cpp`, with `main/editor_mode.h` and `main/output.hpp`.
+- `Output` is a concrete stub (printf to serial) in `main/output.cpp`; display renderer replaces this in step 4
+- `Editor::Init(Output*)` wired in `app_main`; key loop in `main.cpp` calls `ProcessKey` with batching
+- SD save/load (`:w`, `:e`) stubbed with log messages until step 6
+- `screendiffer.cc` not ported — not needed until display renderer
 
 ---
 
