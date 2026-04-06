@@ -430,8 +430,10 @@ static void start_scan(void) {
     struct ble_gap_disc_params params = {};
     params.filter_duplicates = 1;
     params.passive           = 0;
-    params.itvl              = 0;
-    params.window            = 0;
+    // Scan 50ms every 500ms — enough to find a keyboard without hammering the radio.
+    // Units are 0.625ms: 800 * 0.625 = 500ms interval, 80 * 0.625 = 50ms window.
+    params.itvl              = 800;
+    params.window            = 80;
     params.filter_policy     = 0;
     params.limited           = 0;
 

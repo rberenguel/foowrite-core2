@@ -43,6 +43,12 @@ static void draw_scanning_screen(void) {
     display.print("(pair any BLE keyboard)");
 }
 
+// Cursor position for the key echo area
+static int32_t s_echo_x = 10;
+static int32_t s_echo_y = 10;
+static const int32_t ECHO_LINE_H = 20;
+static const int32_t ECHO_MARGIN = 10;
+
 static void draw_connected_screen(void) {
     display.fillScreen(TFT_DARKGREEN);
     display.setFont(&fonts::FreeSansBold12pt7b);
@@ -55,14 +61,34 @@ static void draw_connected_screen(void) {
     display.setCursor(10, 65);
     display.print("Keyboard connected!");
 
-    // Brief green flash, then switch to editor background
     vTaskDelay(pdMS_TO_TICKS(800));
 
     display.fillScreen(TFT_BLACK);
+    s_echo_x = ECHO_MARGIN;
+    s_echo_y = ECHO_MARGIN;
+}
+
+static void echo_key(const key_event_t &evt) {
+    // Show raw HID keycode as hex — keymap translation comes with the editor
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%02X ", evt.keycode);
+
     display.setFont(&fonts::DejaVu18);
-    display.setTextColor(TFT_WHITE, TFT_BLACK);
-    display.setCursor(10, 20);
-    display.print("Ready — type something");
+    display.setTextColor(TFT_GREEN, TFT_BLACK);
+    display.setCursor(s_echo_x, s_echo_y);
+    display.print(buf);
+
+    s_echo_x += display.textWidth(buf);
+    if (s_echo_x > display.width() - 40) {
+        s_echo_x = ECHO_MARGIN;
+        s_echo_y += ECHO_LINE_H;
+        if (s_echo_y > display.height() - ECHO_LINE_H) {
+            // Scroll: clear and start over
+            display.fillScreen(TFT_BLACK);
+            s_echo_x = ECHO_MARGIN;
+            s_echo_y = ECHO_MARGIN;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -88,7 +114,6 @@ extern "C" void app_main(void) {
 
     // 5. Main loop (Core 1) — will become the editor loop
     ble_hid_status_t last_status = BLE_HID_SCANNING;
-    uint32_t cursor_x = 10, cursor_y = 50;
 
     while (true) {
         ble_hid_status_t status = g_ble_status.load();
@@ -97,19 +122,21 @@ extern "C" void app_main(void) {
         if (status != last_status) {
             if (status == BLE_HID_CONNECTED) {
                 draw_connected_screen();
-                cursor_x = 10; cursor_y = 50;
             } else {
                 draw_scanning_screen();
             }
             last_status = status;
         }
 
-        // Drain the key queue and echo to screen (temporary — editor will take over)
+        // Drain the key queue and echo raw keycodes to screen
         key_event_t evt;
         while (xQueueReceive(g_key_queue, &evt, pdMS_TO_TICKS(50)) == pdTRUE) {
             ESP_LOGI(TAG, "Key: 0x%02X shift=%d ctrl=%d alt=%d meta=%d",
                      evt.keycode, evt.modifiers.shift, evt.modifiers.ctrl,
                      evt.modifiers.alt, evt.modifiers.meta);
+            if (last_status == BLE_HID_CONNECTED) {
+                echo_key(evt);
+            }
         }
     }
 }
