@@ -12,6 +12,7 @@
 #include "output.hpp"
 #include "editor.h"
 #include "editor_mode.h"
+#include "splash.h"
 
 static const char *TAG = "main";
 
@@ -34,18 +35,7 @@ static void on_ble_status(ble_hid_status_t status) {
 // ---------------------------------------------------------------------------
 
 static void draw_scanning_screen(void) {
-    display.fillScreen(TFT_NAVY);
-    display.setFont(&fonts::FreeSansBold12pt7b);
-    display.setTextColor(TFT_WHITE, TFT_NAVY);
-    display.setCursor(10, 30);
-    display.print("foowrite");
-
-    display.setFont(&fonts::FreeSans9pt7b);
-    display.setTextColor(TFT_CYAN, TFT_NAVY);
-    display.setCursor(10, 65);
-    display.print("Waiting for keyboard...");
-    display.setCursor(10, 90);
-    display.print("(pair any BLE keyboard)");
+    draw_splash(&display);
 }
 
 static void draw_connected_screen(void) {

@@ -3,6 +3,7 @@ idf_component_register(
         "main.cpp"
         "axp192.cpp"
         "ble_hid_host.cpp"
+        "splash.cpp"
         "keymap.cpp"
         "output.cpp"
         "editor.cpp"
@@ -10,6 +11,7 @@ idf_component_register(
     REQUIRES
         driver
         esp_timer
+        esp_hw_support
         esp_driver_i2c
         bt
         LovyanGFX

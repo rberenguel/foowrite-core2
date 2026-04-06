@@ -78,7 +78,7 @@ static void handle_hid_report(uint16_t attr_handle, const uint8_t *data, uint16_
     for (int i = 0; i < len && pos < (int)sizeof(hex) - 3; i++) {
         pos += snprintf(hex + pos, sizeof(hex) - pos, "%02x ", data[i]);
     }
-    ESP_LOGI(TAG, "NOTIFY hdl=%d len=%d [%s]", attr_handle, len, hex);
+    ESP_LOGD(TAG, "NOTIFY hdl=%d len=%d [%s]", attr_handle, len, hex);
 
     // Standard HID keyboard report:
     //   Byte 0   : modifier mask
@@ -125,10 +125,10 @@ static void handle_hid_report(uint16_t attr_handle, const uint8_t *data, uint16_
 // ---------------------------------------------------------------------------
 
 static void write_all_cccds(uint16_t conn_handle) {
-    ESP_LOGI(TAG, "Subscribing to %d CCCD(s)...", s_num_cccds);
+    ESP_LOGD(TAG, "Subscribing to %d CCCD(s)...", s_num_cccds);
     uint16_t val = htole16(0x0001);
     for (int i = 0; i < s_num_cccds; i++) {
-        ESP_LOGI(TAG, "  CCCD handle %d", s_cccd_handles[i]);
+        ESP_LOGD(TAG, "  CCCD handle %d", s_cccd_handles[i]);
         ble_gattc_write_flat(conn_handle, s_cccd_handles[i],
                              &val, sizeof(val), cccd_write_cb, NULL);
     }
@@ -149,7 +149,7 @@ static int cccd_write_cb(uint16_t conn_handle, const struct ble_gatt_error *erro
         error->status == BLE_HS_ATT_ERR(BLE_ATT_ERR_INSUFFICIENT_ENC)) {
         if (!s_security_pending) {
             s_security_pending = true;
-            ESP_LOGI(TAG, "Auth required, initiating security...");
+            ESP_LOGD(TAG, "Auth required, initiating security...");
             int rc = ble_gap_security_initiate(conn_handle);
             if (rc != 0 && rc != BLE_HS_EALREADY) {
                 ESP_LOGE(TAG, "security_initiate rc=%d", rc);
@@ -170,7 +170,7 @@ static int cccd_write_cb(uint16_t conn_handle, const struct ble_gatt_error *erro
 static int proto_mode_write_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
                                  struct ble_gatt_attr *attr, void *arg) {
     if (error->status == 0) {
-        ESP_LOGI(TAG, "Protocol Mode set to Report Protocol (0x01)");
+        ESP_LOGD(TAG, "Protocol Mode set to Report Protocol (0x01)");
     } else {
         ESP_LOGW(TAG, "Protocol Mode write failed: %d (continuing anyway)", error->status);
     }
@@ -187,7 +187,7 @@ static void start_dsc_disc(uint16_t conn_handle) {
     // Discover ALL descriptors across the entire HID service.
     // We match CCCDs to notifiable characteristics using chr_def_handle.
     s_num_cccds = 0;
-    ESP_LOGI(TAG, "Discovering descriptors in service range [%d-%d]...",
+    ESP_LOGD(TAG, "Discovering descriptors in service range [%d-%d]...",
              s_hid_svc_start, s_hid_svc_end);
     int rc = ble_gattc_disc_all_dscs(conn_handle,
                                       s_hid_svc_start + 1, s_hid_svc_end,
@@ -209,7 +209,7 @@ static int svc_disc_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
                         const struct ble_gatt_svc *service, void *arg) {
     if (error->status == BLE_HS_EDONE) {
         if (s_hid_svc_end != 0) {
-            ESP_LOGI(TAG, "HID svc [%d-%d], discovering all chrs...",
+            ESP_LOGD(TAG, "HID svc [%d-%d], discovering all chrs...",
                      s_hid_svc_start, s_hid_svc_end);
             s_num_chrs = 0;
             ble_gattc_disc_all_chrs(conn_handle, s_hid_svc_start, s_hid_svc_end,
@@ -231,12 +231,12 @@ static int svc_disc_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
 static int chr_disc_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
                         const struct ble_gatt_chr *chr, void *arg) {
     if (error->status == BLE_HS_EDONE) {
-        ESP_LOGI(TAG, "Found %d chr(s) in HID service", s_num_chrs);
+        ESP_LOGD(TAG, "Found %d chr(s) in HID service", s_num_chrs);
 
         // If Protocol Mode characteristic exists, switch to Report Protocol (0x01).
         // This ensures the keyboard sends Report (0x2A4D) notifications, not boot-mode ones.
         if (s_proto_mode_hdl != 0) {
-            ESP_LOGI(TAG, "Writing Protocol Mode = Report (0x01)...");
+            ESP_LOGD(TAG, "Writing Protocol Mode = Report (0x01)...");
             uint8_t report_mode = 0x01;
             int rc = ble_gattc_write_flat(conn_handle, s_proto_mode_hdl,
                                           &report_mode, 1, proto_mode_write_cb, NULL);
@@ -256,7 +256,7 @@ static int chr_disc_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
         s_chr_def_hdls[s_num_chrs] = chr->def_handle;
         s_chr_val_hdls[s_num_chrs] = chr->val_handle;
         s_chr_uuids[s_num_chrs]    = uuid16;
-        ESP_LOGI(TAG, "  chr 0x%04x def=%d val=%d", uuid16,
+        ESP_LOGD(TAG, "  chr 0x%04x def=%d val=%d", uuid16,
                  chr->def_handle, chr->val_handle);
         s_num_chrs++;
 
@@ -309,7 +309,7 @@ static int dsc_disc_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
 
     uint16_t uuid16 = ble_uuid_u16(&dsc->uuid.u);
     bool fallback = ((intptr_t)arg == 1);
-    ESP_LOGI(TAG, "  dsc 0x%04x hdl=%d chr_def=%d%s",
+    ESP_LOGD(TAG, "  dsc 0x%04x hdl=%d chr_def=%d%s",
              uuid16, dsc->handle, chr_def_handle, fallback ? " [fallback]" : "");
 
     if (uuid16 == CCCD_UUID && s_num_cccds < MAX_CCCDS) {
@@ -398,8 +398,12 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg) {
             ESP_LOGI(TAG, "Encryption established, retrying CCCD writes...");
             s_security_pending = false;
             write_all_cccds(event->enc_change.conn_handle);
+        } else if (event->enc_change.status == BLE_HS_ENOTCONN) {
+            // Connection already gone before encryption completed — disconnect
+            // event will handle re-scan, nothing to do here.
+            ESP_LOGD(TAG, "Encryption event on dead connection, ignoring");
         } else {
-            ESP_LOGE(TAG, "Encryption failed: %d", event->enc_change.status);
+            ESP_LOGW(TAG, "Encryption failed: %d", event->enc_change.status);
             ble_gap_terminate(event->enc_change.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
         }
         break;
@@ -407,13 +411,13 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg) {
     case BLE_GAP_EVENT_PASSKEY_ACTION: {
         struct ble_sm_io pkey = {};
         pkey.action = event->passkey.params.action;
-        ESP_LOGI(TAG, "Passkey action=%d (Just Works)", pkey.action);
+        ESP_LOGD(TAG, "Passkey action=%d (Just Works)", pkey.action);
         ble_sm_inject_io(event->passkey.conn_handle, &pkey);
         break;
     }
 
     case BLE_GAP_EVENT_MTU:
-        ESP_LOGI(TAG, "MTU=%d", event->mtu.value);
+        ESP_LOGD(TAG, "MTU=%d", event->mtu.value);
         break;
 
     default:
@@ -467,6 +471,11 @@ static void nimble_host_task(void *param) {
 void ble_hid_init(QueueHandle_t key_queue, ble_hid_status_cb_t status_cb) {
     s_key_queue = key_queue;
     s_status_cb = status_cb;
+
+    // Suppress the NimBLE port layer's own verbose HCI logs
+    // Suppress also ourselves if not warn.
+    esp_log_level_set("NimBLE", ESP_LOG_WARN);
+    esp_log_level_set("ble_hid", ESP_LOG_WARN);
 
     nimble_port_init();
 
