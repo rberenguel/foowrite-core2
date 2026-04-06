@@ -5,14 +5,14 @@ Vim-like editor for the M5Stack Core2, built with ESP-IDF (native C/C++).
 Straight port (via Claude and Gemini) of the original [foowrite](https://github.com/rberenguel/foowrite) I wrote for the Pi Pico
 
 > [!WARNING]
-> Still not functional.
-> - Splash screen ✓
-> - BLE pairing ✓
-> - VIM-like editor wired ✓
-> - Text on screen ⤬
-> - Word wrap, pagination ⤬
-> - Saving to SD ⤬
-> - Settings, controls, touch ⤬
+> Still not in a working state
+> - [x] Splash screen
+> - [x] BLE pairing
+> - [x] VIM-like editor wired
+> - [ ] Text on screen
+> - [ ] Word wrap, pagination
+> - [ ] Saving to SD <- minimum needed for it to be usable is here
+> - [ ] Settings, controls, touch
 
 ## Hardware
 
