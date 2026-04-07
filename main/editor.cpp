@@ -12,6 +12,7 @@
 #include "editor_mode.h"
 #include "keymap.h"
 #include "output.hpp"
+#include "axp192.h"
 
 [[maybe_unused]] static std::string ModeString(EditorMode mode) {
     switch (mode) {
@@ -429,6 +430,14 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
                     char buf[64];
                     snprintf(buf, sizeof(buf), "w: %d c: %d l: %d", wc, cc, CountLines());
                     output_->CommandLine(buf);
+                }
+                if (command.find(":br ") == 0 || command.find(":brightness ") == 0) {
+                    int val = 0;
+                    if (command.find(":br ") == 0) val = atoi(command.c_str() + 4);
+                    else val = atoi(command.c_str() + 12);
+                    val = fmax(0, fmin(100, val));
+                    axp192_set_lcd_backlight((val * 255) / 100);
+                    output_->CommandLine("brightness set");
                 }
                 if (command == ":lorem") {
                     current_line_.assign(

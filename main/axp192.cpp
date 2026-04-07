@@ -137,7 +137,7 @@ int axp192_get_battery_pct() {
     uint32_t val = (h << 4) | l;
     float mv = val * 1.1f;
 
-    if (mv >= 4200.0f) return 100;
+    if (mv >= 4150.0f) return 100;
     if (mv <= 3200.0f) return 0;
-    return (int)((mv - 3200.0f) / 10.0f);
+    return (int)((mv - 3200.0f) / 9.5f);
 }

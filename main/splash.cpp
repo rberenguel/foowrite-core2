@@ -162,27 +162,27 @@ void draw_splash(LGFX* display) {
     if (threshold < 6) {
         display->fillRect(0, QL, SCREEN_W, LS * 2 + 4, TFT_BLACK);
         display->setTextColor(TFT_WHITE, TFT_BLACK);
-        display->setCursor(8, QL + 13);
+        display->setCursor(24, QL + 13);
         display->print("The mountains are calling");
-        display->setCursor(8, QL + 13 + LS);
+        display->setCursor(24, QL + 13 + LS);
         display->print("    and I must write");
     } else if (threshold < 8) {
         display->fillRect(0, QL - LS, SCREEN_W, LS * 4 + 4, TFT_BLACK);
         display->setTextColor(TFT_WHITE, TFT_BLACK);
-        display->setCursor(8, QL - LS + 13);
+        display->setCursor(24, QL - LS + 13);
         display->print("Ever tried. Ever failed.");
-        display->setCursor(8, QL - LS + 13 + LS);
+        display->setCursor(24, QL - LS + 13 + LS);
         display->print(" No matter.");
-        display->setCursor(8, QL - LS + 13 + LS * 2);
+        display->setCursor(24, QL - LS + 13 + LS * 2);
         display->print("Try Again. Fail again.");
-        display->setCursor(8, QL - LS + 13 + LS * 3);
+        display->setCursor(24, QL - LS + 13 + LS * 3);
         display->print(" Fail better.");
     } else {
         display->fillRect(0, QL, SCREEN_W, LS * 2 + 4, TFT_BLACK);
         display->setTextColor(TFT_WHITE, TFT_BLACK);
-        display->setCursor(8, QL + 13);
+        display->setCursor(24, QL + 13);
         display->print("Not all those who wander");
-        display->setCursor(8, QL + 13 + LS);
+        display->setCursor(24, QL + 13 + LS);
         display->print("                are lost");
     }
 
@@ -191,20 +191,24 @@ void draw_splash(LGFX* display) {
     // The symbol is a vertical stem with two right-pointing chevrons:
     //   top → upper-right → mid → lower-right → bottom  (and back through mid)
     // -----------------------------------------------------------------------
+    const uint32_t BLUE = 0x5599FF;  // light cornflower blue (RGB888)
+    draw_bt_icon(display, BLUE);
+}
+
+void draw_bt_icon(LGFX* display, uint32_t color) {
     const int BX = 306;   // stem x
     const int BY = 210;   // top of logo
     const int BH = 26;    // total height
     const int BW = 10;    // arm reach to the right
     const int BM = BY + BH / 2;  // mid y
-    const uint32_t BLUE = 0x5599FF;  // light cornflower blue (RGB888)
 
     // Stem
-    display->drawLine(BX, BY, BX, BY + BH, BLUE);
-    display->drawLine(BX + 1, BY, BX + 1, BY + BH, BLUE);
+    display->drawLine(BX, BY, BX, BY + BH, color);
+    display->drawLine(BX + 1, BY, BX + 1, BY + BH, color);
     // Upper chevron: top → upper-right → mid
-    display->drawLine(BX, BY,  BX + BW, BM - BH / 4, BLUE);
-    display->drawLine(BX + BW, BM - BH / 4, BX, BM,  BLUE);
+    display->drawLine(BX, BY,  BX + BW, BM - BH / 4, color);
+    display->drawLine(BX + BW, BM - BH / 4, BX, BM,  color);
     // Lower chevron: mid → lower-right → bottom
-    display->drawLine(BX, BM,  BX + BW, BM + BH / 4, BLUE);
-    display->drawLine(BX + BW, BM + BH / 4, BX, BY + BH, BLUE);
+    display->drawLine(BX, BM,  BX + BW, BM + BH / 4, color);
+    display->drawLine(BX + BW, BM + BH / 4, BX, BY + BH, color);
 }

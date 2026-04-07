@@ -39,16 +39,7 @@ static void draw_scanning_screen(void) {
 }
 
 static void draw_connected_screen(void) {
-    display.fillScreen(TFT_DARKGREEN);
-    display.setFont(&fonts::FreeSansBold12pt7b);
-    display.setTextColor(TFT_WHITE, TFT_DARKGREEN);
-    display.setCursor(10, 30);
-    display.print("foowrite");
-
-    display.setFont(&fonts::FreeSans9pt7b);
-    display.setTextColor(TFT_WHITE, TFT_DARKGREEN);
-    display.setCursor(10, 65);
-    display.print("Keyboard connected!");
+    draw_bt_icon(&display, TFT_GREEN);
 
     vTaskDelay(pdMS_TO_TICKS(800));
 
