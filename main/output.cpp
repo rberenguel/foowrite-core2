@@ -262,6 +262,38 @@ static void draw_status(EditorMode mode, const char* msg = nullptr) {
 }
 
 // ---------------------------------------------------------------------------
+// Word-wrap renderer for read-only context lines (no cursor, no pagination).
+// Draws text starting at (0, y) in g, wrapping at WRAP_W.
+// Returns the y-coordinate immediately after the last rendered line.
+// ---------------------------------------------------------------------------
+static int32_t render_context(lgfx::LGFX_Sprite& g, int32_t y, const std::string& t) {
+    const int32_t lh      = g.fontHeight() + 2;
+    const int32_t space_w = cw(g, ' ');
+
+    int32_t px = 0;
+    for (size_t i = 0; i < t.size() && y < TEXT_H; ) {
+        char ch = t[i];
+        if (ch == '\n') { px = 0; y += lh; i++; continue; }
+        if (ch == ' ')  { px += space_w; i++; continue; }
+
+        // Measure word
+        size_t ws = i;
+        int32_t ww = 0;
+        while (i < t.size() && t[i] != ' ' && t[i] != '\n') { ww += cw(g, t[i]); i++; }
+
+        if (px != 0 && px + ww > WRAP_W) { px = 0; y += lh; }
+        if (y >= TEXT_H) break;
+
+        for (size_t j = ws; j < i; j++) {
+            char buf[2] = {t[j], '\0'};
+            g.drawString(buf, px, y);
+            px += cw(g, t[j]);
+        }
+    }
+    return y + lh;
+}
+
+// ---------------------------------------------------------------------------
 // Dirty-rect detection — compare front vs back buffer pixel-by-pixel.
 // Returns false if nothing changed (push can be skipped entirely).
 // ---------------------------------------------------------------------------
@@ -356,8 +388,7 @@ void Output::Emit(const std::string& s, int cursor_pos, EditorMode mode) {
         const int max_ctx = (TEXT_H - used_h) / lh + 1;
         for (const auto& line : editor_->GetFollowingLines(max_ctx)) {
             if (cy >= TEXT_H) break;
-            front.drawString(line.c_str(), 0, cy);
-            cy += lh;
+            cy = render_context(front, cy, line);
         }
     }
 

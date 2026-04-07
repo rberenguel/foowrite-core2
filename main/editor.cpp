@@ -437,8 +437,14 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
     // Command-line mode
     if (mode_ == EditorMode::kCommandLineMode) {
         switch (key) {
+            case KEY_ESC:
+                command_line_.clear();
+                mode_ = EditorMode::kNormal;
+                output_->Command(OutputCommands::kCommandMode);
+                output_->Emit(current_line_, ncolumn_, mode_);
+                return;
             case KEY_BACKSPACE:
-                command_line_.pop_back();
+                if (!command_line_.empty()) command_line_.pop_back();
                 output_->CommandLine(command_line_);
                 break;
             case KEY_ENTER: {
@@ -532,7 +538,8 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
 // ---------------------------------------------------------------------------
 
 void Editor::HandleEsc() {
-    if (mode_ == EditorMode::kInsert) {
+    if (mode_ == EditorMode::kInsert || mode_ == EditorMode::kCommandLineMode) {
+        command_line_.clear();
         mode_ = EditorMode::kNormal;
         output_->Command(OutputCommands::kCommandMode);
         output_->Emit(current_line_, ncolumn_, mode_);
