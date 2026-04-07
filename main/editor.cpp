@@ -475,6 +475,15 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
                     axp192_set_lcd_backlight((val * 255) / 100);
                     output_->CommandLine("brightness set");
                 }
+                if (command.find(":rot ") == 0 || command.find(":rotate ") == 0) {
+                    int val = 0;
+                    if (command.find(":rot ") == 0) val = atoi(command.c_str() + 5);
+                    else val = atoi(command.c_str() + 8);
+                    
+                    int rot_val = (val == -1) ? 3 : 1;
+                    output_->SetRotation(rot_val);
+                    output_->CommandLine("rotated");
+                }
                 if (command == ":lorem") {
                     current_line_.assign(
                         "The treeship Yggdrasill was a marvel of bio-engineering, a "

@@ -132,6 +132,8 @@ FooConfig sd_load_config() {
         } else if (key == "brightness") {
             int v = atoi(val.c_str());
             cfg.brightness = v < 1 ? 1 : v > 100 ? 100 : v;
+        } else if (key == "rotation") {
+            cfg.rotation = atoi(val.c_str());
         }
     }
     fclose(f);

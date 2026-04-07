@@ -441,5 +441,13 @@ void Output::Command(const OutputCommands& cmd) {
     }
 }
 
+void Output::SetRotation(int rot) {
+    display.setRotation(rot);
+    display.fillScreen(COL_BG);
+    if (s_bufs_ready) {
+        s_buf[1 - s_curr].fillSprite(~COL_BG);
+    }
+}
+
 void Output::ProcessHandlers() {}
 void Output::ProcessEvent(EventType ev) { (void)ev; }

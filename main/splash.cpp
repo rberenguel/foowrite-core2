@@ -143,6 +143,7 @@ void draw_splash(LGFX* display) {
     // "foowrite" title — centred, just above half-screen height
     // -----------------------------------------------------------------------
     display->setFont(&fonts::FreeSansBold12pt7b);
+    display->setTextDatum(lgfx::baseline_left);
     int tw = display->textWidth("foowrite");
     int tx = (SCREEN_W - tw) / 2;
     int ty = 95;                      // top of box; baseline at ty+20 ≈ y=115
@@ -205,9 +206,9 @@ void draw_splash(LGFX* display) {
 
 void draw_bt_icon(LGFX* display, uint32_t color) {
     const int BX = 306;   // stem x
-    const int BY = 210;   // top of logo
-    const int BH = 26;    // total height
-    const int BW = 10;    // arm reach to the right
+    const int BY = 216;   // top of logo
+    const int BH = 16;    // total height
+    const int BW = 8;     // arm reach to the right
     const int BM = BY + BH / 2;  // mid y
 
     // Stem

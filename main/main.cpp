@@ -40,6 +40,7 @@ static void apply_config() {
     FooConfig cfg = sd_load_config();
     g_use_qwerty = cfg.qwerty;
     axp192_set_lcd_backlight((cfg.brightness * 255) / 100);
+    display.setRotation(cfg.rotation == -1 ? 3 : 1);
 }
 
 static void draw_scanning_screen(void) {

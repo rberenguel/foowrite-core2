@@ -25,6 +25,7 @@ class Output {
     void CommandLine(const std::list<char>& s);
     void CommandLine(const std::string& s);
     void Command(const OutputCommands& command);
+    void SetRotation(int rot);
     void Init(Editor*);
     void ProcessHandlers();
     void ProcessEvent(EventType ev);

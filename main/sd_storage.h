@@ -8,8 +8,9 @@
 // ---------------------------------------------------------------------------
 
 struct FooConfig {
-    bool qwerty    = false;  // false = Colemak (default)
-    int  brightness = 50;   // 1-100; 0 is treated as 1 to keep backlight on
+    bool qwerty     = false; // false = Colemak (default)
+    int  brightness = 50;    // 1-100; 0 is treated as 1 to keep backlight on
+    int  rotation   = 1;     // 1 = normal, -1 = flipped / upside-down
 };
 
 // Parse /sd/config.txt (key: value  # comment format).
