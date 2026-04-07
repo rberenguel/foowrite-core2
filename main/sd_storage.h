@@ -1,6 +1,7 @@
 #pragma once
 #include <list>
 #include <string>
+#include <vector>
 
 // ---------------------------------------------------------------------------
 // Runtime configuration loaded from /sd/config.txt
@@ -30,3 +31,7 @@ bool sd_save(const char* filename,
 bool sd_load(const char* filename,
              std::list<std::string>& document,
              std::string& err_msg);
+
+// Returns filenames (without .txt extension) for all non-hidden .txt files
+// in /sd/.  Returns empty vector if SD is not mounted or directory is empty.
+std::vector<std::string> sd_list();

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <dirent.h>
 
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
@@ -72,6 +73,23 @@ bool sd_load(const char* filename,
 
     if (document.empty()) document.push_back("");
     return true;
+}
+
+std::vector<std::string> sd_list() {
+    std::vector<std::string> files;
+    if (!s_mounted) return files;
+    DIR* dir = opendir("/sd");
+    if (!dir) return files;
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != nullptr) {
+        std::string name(entry->d_name);
+        if (name.empty() || name[0] == '.') continue;      // skip hidden
+        auto dot = name.rfind(".txt");
+        if (dot == std::string::npos) continue;            // .txt files only
+        files.push_back(name.substr(0, dot));
+    }
+    closedir(dir);
+    return files;
 }
 
 // ---------------------------------------------------------------------------

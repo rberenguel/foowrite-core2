@@ -501,17 +501,44 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
                 }
                 if (command.rfind(":e ", 0) == 0) {
                     auto arg = command.substr(3);
+                    while (!arg.empty() && arg[0] == ' ') arg.erase(0, 1);
                     std::string err;
                     if (sd_load(arg.c_str(), document_, err)) {
                         filename_ = arg;
                         row_ = document_.begin();
                         current_line_ = *row_;
                         ncolumn_ = 0;
+                        mode_ = EditorMode::kNormal;
                         output_->Emit(current_line_, ncolumn_, mode_);
                         output_->CommandLine("loaded: " + filename_);
                     } else {
                         output_->CommandLine("error: " + err);
                     }
+                }
+
+                // :e alone — show directory listing
+                if (command == ":e") {
+                    auto files = sd_list();
+                    document_.clear();
+                    if (files.empty()) {
+                        document_.push_back("(no files on sd)");
+                    } else {
+                        document_.push_back("--- files on sd ---");
+                        document_.push_back("");
+                        for (const auto& f : files) document_.push_back("- " + f);
+                    }
+                    filename_ = "";
+                    row_ = document_.begin();
+                    current_line_ = *row_;
+                    ncolumn_ = 0;
+
+                    // Stay in command-line mode so user can type :e <filename>
+                    mode_ = EditorMode::kCommandLineMode;
+                    std::list<char> prompt = {':', 'e', ' '};
+                    command_line_ = prompt;
+                    output_->CommandLine(command_line_);
+                    output_->Emit(current_line_, ncolumn_, mode_);
+                    return;
                 }
                 if (command == ":ps") {
                     printf("\n--- document ---\n");
