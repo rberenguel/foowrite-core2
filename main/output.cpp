@@ -340,9 +340,25 @@ void Output::Emit(const std::string& s, int cursor_pos, EditorMode mode) {
     lgfx::LGFX_Sprite& front = s_buf[s_curr];
     lgfx::LGFX_Sprite& back  = s_buf[1 - s_curr];
 
-    // Render new frame into front buffer (pure RAM, no SPI).
-    render_to(front, 0, 0, s, cursor_pos, mode,
-              &prev_line_start_, &next_line_start_);
+    // Render current line into front buffer (pure RAM, no SPI).
+    int32_t used_h = render_to(front, 0, 0, s, cursor_pos, mode,
+                               &prev_line_start_, &next_line_start_);
+
+    // Fill the screen space below the current line with following document
+    // lines as read-only context.  This replicates the original foowrite
+    // behaviour where a short current line does not leave the screen blank.
+    if (editor_ && used_h < TEXT_H) {
+        set_body_font(front);
+        front.setTextColor(COL_TEXT, COL_BG);
+        const int32_t lh = front.fontHeight() + 2;
+        int32_t cy = used_h;
+        const int max_ctx = (TEXT_H - used_h) / lh + 1;
+        for (const auto& line : editor_->GetFollowingLines(max_ctx)) {
+            if (cy >= TEXT_H) break;
+            front.drawString(line.c_str(), 0, cy);
+            cy += lh;
+        }
+    }
 
     // Find the bounding box of pixels that changed vs the previous frame.
     int32_t dx, dy, dw, dh;

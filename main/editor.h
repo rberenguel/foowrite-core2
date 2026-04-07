@@ -4,6 +4,7 @@
 
 #include <list>
 #include <string>
+#include <vector>
 
 #include "output.hpp"
 #include "keymap.h"
@@ -22,10 +23,14 @@ class Editor {
     void ProcessSaving();
     void Refresh();
 
-    // Accessors used by tests
+    // Accessors used by tests and the output renderer
     std::string GetCurrentLine();
     std::string GetDocument();
     int         CountLines();
+
+    // Returns up to n lines from the document that follow the current line.
+    // Used by Output to fill remaining screen space with read-only context.
+    std::vector<std::string> GetFollowingLines(int n) const;
 
     void ResetState() {
         current_line_.clear();

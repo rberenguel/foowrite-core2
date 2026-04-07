@@ -84,6 +84,17 @@ void Editor::HandleEnter() {
 std::string Editor::GetCurrentLine() { return current_line_; }
 int         Editor::CountLines()     { return (int)document_.size(); }
 
+std::vector<std::string> Editor::GetFollowingLines(int n) const {
+    std::vector<std::string> result;
+    if (row_ == document_.end()) return result;
+    auto it = row_;
+    ++it;
+    for (int i = 0; i < n && it != document_.end(); ++i, ++it) {
+        result.push_back(*it);
+    }
+    return result;
+}
+
 std::string Editor::GetDocument() {
     std::string full;
     for (const auto& line : document_) {
