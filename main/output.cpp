@@ -8,6 +8,7 @@
 #include <list>
 #include <string>
 
+#include "axp192.h"
 #include "editor_mode.h"
 #include "esp_timer.h"
 #include "lgfx_config.h"
@@ -249,6 +250,14 @@ static void draw_status(EditorMode mode, const char* msg = nullptr) {
         display.setTextColor(COL_TEXT, COL_STATUS_BG);
         display.drawString(msg, SCREEN_W / 2, ty);
     }
+    
+    // Draw battery percentage on the far right
+    char bat_str[16];
+    snprintf(bat_str, sizeof(bat_str), "%d%%", axp192_get_battery_pct());
+    display.setFont(&fonts::Font0); // small built-in glcd font
+    display.setTextColor(COL_TEXT, COL_STATUS_BG);
+    display.setTextDatum(lgfx::middle_right);
+    display.drawString(bat_str, SCREEN_W - 4, STATUS_Y + STATUS_H / 2);
 }
 
 // ---------------------------------------------------------------------------

@@ -127,3 +127,17 @@ void axp192_set_exten(bool enable) {
     else
         axp_clear_bits(AXP192_REG_POWER_OUTPUT_CTL, AXP192_EXTEN_EN);
 }
+
+int axp192_get_battery_pct() {
+    uint8_t h, l;
+    if (axp_read(0x78, &h) != ESP_OK) return 0;
+    if (axp_read(0x79, &l) != ESP_OK) return 0;
+
+    // According to AXP192 datasheet, ADC data is 12-bit
+    uint32_t val = (h << 4) | l;
+    float mv = val * 1.1f;
+
+    if (mv >= 4200.0f) return 100;
+    if (mv <= 3200.0f) return 0;
+    return (int)((mv - 3200.0f) / 10.0f);
+}

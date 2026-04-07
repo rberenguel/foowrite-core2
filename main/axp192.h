@@ -50,6 +50,9 @@ void axp192_set_lcd_backlight(uint8_t brightness);
 // Enable/disable the 5V boost (bus power, speaker, etc.)
 void axp192_set_exten(bool enable);
 
+// Get battery level (0-100%)
+int axp192_get_battery_pct();
+
 #ifdef __cplusplus
 }
 #endif
