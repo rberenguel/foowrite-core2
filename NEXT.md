@@ -35,7 +35,7 @@ a `build.mac` script mirroring foowrite's.
 
 ---
 
-## 4. Display renderer (Core2 Output implementation)
+## 4. Display renderer (Core2 Output implementation) ✅
 
 Implement `Output` for the ILI9342C via LovyanGFX — this replaces `src/pico/gfx/gfx.cc`.
 
@@ -62,34 +62,7 @@ for now, or later wired to the capacitive touch buttons on the front.
 
 ---
 
-## 5. FreeRTOS task wiring
-
-Replace the `app_main` while-loop with a proper editor task pinned to Core 1:
-
-```cpp
-xTaskCreatePinnedToCore(editor_task, "editor", 8192, NULL, 5, NULL, 1);
-```
-
-The editor task:
-```cpp
-void editor_task(void *) {
-    Editor editor(&output);
-    editor.Load();  // :e equivalent on boot if file exists on SD
-    while (true) {
-        key_event_t evt;
-        bool batched = uxQueueMessagesWaiting(g_key_queue) > 1;
-        xQueueReceive(g_key_queue, &evt, portMAX_DELAY);
-        char c = get_char_from_key(evt.keycode, &evt.modifiers);
-        editor.ProcessKey(c, &evt.modifiers, batched);
-    }
-}
-```
-
-BLE task stays on Core 0 (already pinned via sdkconfig).
-
----
-
-## 6. SD card file save/load
+## 5. SD card file save/load
 
 The Core2 SD slot shares the SPI bus with the display (MOSI=23, MISO=38, CLK=18, CS=4).
 LovyanGFX sets `bus_shared=true` in `lgfx_config.h` for this reason.
@@ -104,10 +77,9 @@ Leave for after the editor is working on screen.
 
 ---
 
-## 7. Nice-to-haves (later)
+## 6. Nice-to-haves (later)
 
-- **Bonding**: optionally store bond keys in NVS so the keyboard reconnects without
-  re-pairing. Controlled by a `:bond` command.
+- **FreeRTOS task split** (optional): move editor loop into a dedicated task pinned to Core 1 (`xTaskCreatePinnedToCore`). Not needed unless watchdog timeouts or jank appear — the queue-driven main loop already yields correctly.
 - **Multiple files**: `:ls` to list `/sd/*.txt`, tab completion on `:e`
 - **Battery display**: read AXP192 ADC registers for battery voltage, show in status bar
 - **Touch buttons**: the three capacitive buttons on the Core2 front panel could handle

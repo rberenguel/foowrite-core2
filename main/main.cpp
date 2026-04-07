@@ -19,7 +19,7 @@ static const char *TAG = "main";
 // Shared queue — BLE writes, editor reads
 QueueHandle_t g_key_queue = NULL;
 
-static LGFX   display;
+LGFX   display;   // extern'd by output.cpp for display rendering
 static Output g_output;
 static Editor g_editor;
 
