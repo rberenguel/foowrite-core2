@@ -4,6 +4,7 @@
 // Solarized dark palette; sprite-based rendering for flicker-free updates.
 
 #include "output.hpp"
+#include "editor.h"
 
 #include <list>
 #include <string>

@@ -8,6 +8,7 @@
 #include "axp192.h"
 #include "lgfx_config.h"
 #include "key_queue.h"
+#include "keymap.h"
 #include "ble_hid_host.h"
 #include "output.hpp"
 #include "editor.h"
@@ -35,11 +36,18 @@ static void on_ble_status(ble_hid_status_t status) {
 // Display helpers
 // ---------------------------------------------------------------------------
 
+static void apply_config() {
+    FooConfig cfg = sd_load_config();
+    g_use_qwerty = cfg.qwerty;
+    axp192_set_lcd_backlight((cfg.brightness * 255) / 100);
+}
+
 static void draw_scanning_screen(void) {
     draw_splash(&display);
 }
 
 static void draw_connected_screen(void) {
+    apply_config();   // re-read config on every connect; :q + reconnect refreshes
     draw_bt_icon(&display, TFT_GREEN);
 
     vTaskDelay(pdMS_TO_TICKS(800));
@@ -64,6 +72,7 @@ extern "C" void app_main(void) {
     if (!sd_init()) {
         ESP_LOGW(TAG, "SD card not found or mount failed");
     }
+    apply_config();
 
     ESP_LOGI(TAG, "Display initialised: %dx%d", (int)display.width(), (int)display.height());
 

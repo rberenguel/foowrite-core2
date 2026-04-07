@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
@@ -71,4 +72,50 @@ bool sd_load(const char* filename,
 
     if (document.empty()) document.push_back("");
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+static std::string cfg_trim(const std::string& s) {
+    const char* ws = " \t\r\n";
+    size_t a = s.find_first_not_of(ws);
+    if (a == std::string::npos) return "";
+    size_t b = s.find_last_not_of(ws);
+    return s.substr(a, b - a + 1);
+}
+
+FooConfig sd_load_config() {
+    FooConfig cfg;
+    if (!s_mounted) return cfg;
+
+    FILE* f = fopen("/sd/config.txt", "r");
+    if (!f) return cfg;
+
+    char buf[128];
+    while (fgets(buf, sizeof(buf), f)) {
+        std::string line = cfg_trim(buf);
+        if (line.empty() || line[0] == '#') continue;
+
+        // Strip inline comment
+        auto comment = line.find('#');
+        if (comment != std::string::npos) line = line.substr(0, comment);
+
+        auto colon = line.find(':');
+        if (colon == std::string::npos) continue;
+
+        std::string key = cfg_trim(line.substr(0, colon));
+        std::string val = cfg_trim(line.substr(colon + 1));
+        if (key.empty() || val.empty()) continue;
+
+        if (key == "layout") {
+            cfg.qwerty = (val == "qwerty");
+        } else if (key == "brightness") {
+            int v = atoi(val.c_str());
+            cfg.brightness = v < 1 ? 1 : v > 100 ? 100 : v;
+        }
+    }
+    fclose(f);
+    return cfg;
 }

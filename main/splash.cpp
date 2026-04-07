@@ -4,6 +4,7 @@
 // Original: 128×64 mono.  This version: 320×240 colour (ILI9342C / LovyanGFX).
 
 #include "splash.h"
+#include "version.h"
 
 #include <math.h>
 #include <vector>
@@ -149,6 +150,13 @@ void draw_splash(LGFX* display) {
     display->setTextColor(TFT_WHITE, TFT_BLACK);
     display->setCursor(tx, ty + 20);
     display->print("foowrite");
+
+    // Version — smaller font, centred directly below the title
+    display->setFont(&fonts::Font0);
+    display->setTextSize(1);
+    display->setTextDatum(lgfx::top_center);
+    display->setTextColor(TFT_WHITE, TFT_BLACK);
+    display->drawString(FOOWRITE_VERSION, SCREEN_W / 2, ty + 28);
 
     // -----------------------------------------------------------------------
     // Random inspirational quote — black box overlaid on lower mountains
