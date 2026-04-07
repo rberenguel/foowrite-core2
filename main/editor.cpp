@@ -13,6 +13,7 @@
 #include "keymap.h"
 #include "output.hpp"
 #include "axp192.h"
+#include "sd_storage.h"
 
 [[maybe_unused]] static std::string ModeString(EditorMode mode) {
     switch (mode) {
@@ -221,7 +222,14 @@ void Editor::ProcessCommand(char c, KeyModifiers* modifiers) {
 
         case 'd':
             if (command_line_str == "d") {
-                current_line_.clear();
+                if (document_.size() > 1 && row_ != document_.end()) {
+                    row_ = document_.erase(row_);
+                    if (row_ == document_.end()) --row_;
+                    current_line_ = *row_;
+                } else {
+                    current_line_.clear();
+                    if (row_ != document_.end()) *row_ = "";
+                }
                 ncolumn_ = 0;
                 command_line_ = {};
             } else {
@@ -319,6 +327,13 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
     char c = get_char_from_key(key, modifiers);
 
     int now = output_->CurrentTimeInMillis();
+    // Debounce KEY_ENTER specifically (some keyboards bounce / send duplicates on ESP32 BLE)
+    static int previously_entered = -1;
+    if (key == KEY_ENTER) {
+        if (now - previously_entered < 200) return;
+        previously_entered = now;
+    }
+
     if ((now - previously_shifted_ < 150) && key == (uint8_t)previous_key_) {
         return;
     }
@@ -449,15 +464,33 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
                     UpdateCurrentLine(-1);
                     output_->Emit(current_line_, ncolumn_, mode_);
                 }
-                if (command == ":w") {
+                if (command.rfind(":w", 0) == 0) {
                     if (!current_line_.empty()) UpdateCurrentLine(-1);
-                    should_save_ = true;
-                    ProcessSaving();
+                    auto arg = command.substr(2);
+                    // trim leading space
+                    while (!arg.empty() && arg[0] == ' ') arg.erase(0, 1);
+                    if (!arg.empty()) filename_ = arg;
+
+                    std::string err;
+                    if (sd_save(filename_.c_str(), document_, err)) {
+                        output_->CommandLine("saved: " + filename_);
+                    } else {
+                        output_->CommandLine("error: " + err);
+                    }
                 }
-                if (command == ":e") {
-                    // SD card load — implemented in step 6.
-                    // Will open /sd/<filename> via VFS.
-                    output_->CommandLine("load not yet implemented");
+                if (command.rfind(":e ", 0) == 0) {
+                    auto arg = command.substr(3);
+                    std::string err;
+                    if (sd_load(arg.c_str(), document_, err)) {
+                        filename_ = arg;
+                        row_ = document_.begin();
+                        current_line_ = *row_;
+                        ncolumn_ = 0;
+                        output_->Emit(current_line_, ncolumn_, mode_);
+                        output_->CommandLine("loaded: " + filename_);
+                    } else {
+                        output_->CommandLine("error: " + err);
+                    }
                 }
                 if (command == ":ps") {
                     printf("\n--- document ---\n");
@@ -468,6 +501,9 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
                 mode_ = EditorMode::kNormal;
                 return;
             }
+            case KEY_SPACE:
+                c = ' ';
+                // fall through
             default:
                 switch (c) {
                     case '\0': break;

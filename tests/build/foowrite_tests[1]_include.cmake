@@ -1,0 +1,5 @@
+if(EXISTS "/Users/ruben/code/foowrite-core2/tests/build/foowrite_tests[1]_tests.cmake")
+  include("/Users/ruben/code/foowrite-core2/tests/build/foowrite_tests[1]_tests.cmake")
+else()
+  add_test(foowrite_tests_NOT_BUILT foowrite_tests_NOT_BUILT)
+endif()

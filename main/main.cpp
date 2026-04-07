@@ -12,6 +12,7 @@
 #include "output.hpp"
 #include "editor.h"
 #include "editor_mode.h"
+#include "sd_storage.h"
 #include "splash.h"
 
 static const char *TAG = "main";
@@ -58,6 +59,11 @@ extern "C" void app_main(void) {
     // 2. Display
     display.init();
     display.setRotation(1);
+
+    // 2b. SD card (SPI3_HOST shared with display; must init after display)
+    if (!sd_init()) {
+        ESP_LOGW(TAG, "SD card not found or mount failed");
+    }
 
     ESP_LOGI(TAG, "Display initialised: %dx%d", (int)display.width(), (int)display.height());
 

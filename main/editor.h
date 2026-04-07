@@ -57,4 +57,5 @@ class Editor {
     std::list<std::string> document_;
     EditorMode        mode_;
     bool              should_save_ = false;
+    std::string       filename_ = "untitled";
 };

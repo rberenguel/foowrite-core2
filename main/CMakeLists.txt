@@ -7,6 +7,7 @@ idf_component_register(
         "keymap.cpp"
         "output.cpp"
         "editor.cpp"
+        "sd_storage.cpp"
     INCLUDE_DIRS "."
     REQUIRES
         driver
@@ -15,4 +16,6 @@ idf_component_register(
         esp_driver_i2c
         bt
         LovyanGFX
+        fatfs
+        sdmmc
 )
