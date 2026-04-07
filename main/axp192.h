@@ -53,6 +53,9 @@ void axp192_set_exten(bool enable);
 // Get battery level (0-100%)
 int axp192_get_battery_pct();
 
+// Cut all power rails — device powers off immediately.
+void axp192_shutdown();
+
 #ifdef __cplusplus
 }
 #endif

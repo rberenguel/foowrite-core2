@@ -451,6 +451,10 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
                 auto command = std::string(command_line_.begin(), command_line_.end());
                 command_line_.clear();
 
+                if (command == ":qq") {
+                    axp192_shutdown();
+                    return;  // unreachable, but tidy
+                }
                 if (command == ":q") {
                     mode_ = EditorMode::kNormal;
                     output_->Command(OutputCommands::kSplash);

@@ -128,6 +128,10 @@ void axp192_set_exten(bool enable) {
         axp_clear_bits(AXP192_REG_POWER_OUTPUT_CTL, AXP192_EXTEN_EN);
 }
 
+void axp192_shutdown() {
+    axp_set_bits(0x32, 0x80);  // POFF bit — AXP192 cuts all rails immediately
+}
+
 int axp192_get_battery_pct() {
     uint8_t h, l;
     if (axp_read(0x78, &h) != ESP_OK) return 0;

@@ -2,92 +2,115 @@
 
 Vim-like editor for the M5Stack Core2, built with ESP-IDF (native C/C++).
 
-Straight port (via Claude and Gemini) of the original [foowrite](https://github.com/rberenguel/foowrite) I wrote for the Pi Pico
-
-> [!WARNING]
-> Still not in a working state
-> - [x] Splash screen
-> - [x] BLE pairing
-> - [x] VIM-like editor wired
-> - [ ] Text on screen
-> - [ ] Word wrap, pagination
-> - [ ] Saving to SD <- minimum needed for it to be usable is here
-> - [ ] Settings, controls, touch
+Straight port (via Claude and Gemini) of the original [foowrite](https://github.com/rberenguel/foowrite) I wrote for the Pi Pico.
 
 ## Hardware
 
 - M5Stack Core2 (ESP32, ILI9342C 320×240 display, AXP192 PMU)
 - Bluetooth LE keyboard (pairs with any HID keyboard on boot)
-- Micro-SD card for file storage (TODO)
+- Micro-SD card for file storage
 
-## Toolchain Setup (macOS)
+## Installing a pre-built release
 
-Do this once.
+Download the latest `foowrite-core2-VERSION.bin` from the
+[Releases](../../releases) page, then flash it with
+[esptool](https://github.com/espressif/esptool) — no ESP-IDF required.
 
-**1. Prerequisites**
+**1. Install esptool**
+
+```bash
+pip install esptool
+```
+
+**2. Find the Core2's serial port**
+
+Plug in the Core2 via USB-C, then:
+
+```bash
+# macOS
+ls /dev/cu.usbserial-*
+
+# Linux
+ls /dev/ttyUSB*
+```
+
+**3. Flash**
+
+```bash
+esptool.py --chip esp32 --port /dev/cu.usbserial-XXXX \
+  --baud 921600 write_flash 0x0 foowrite-core2-VERSION.bin
+```
+
+Replace `/dev/cu.usbserial-XXXX` with the port found above and `VERSION` with
+the release you downloaded.  The device will reboot into foowrite immediately
+after flashing.
+
+---
+
+## Building from source
+
+### Toolchain setup (macOS, one-time)
 
 ```bash
 brew install cmake ninja dfu-util ccache
 ```
 
-**2. Download ESP-IDF v5.3**
-
 ```bash
-mkdir -p ~/esp
-cd ~/esp
+mkdir -p ~/esp && cd ~/esp
 git clone -b v5.3.5 --recursive https://github.com/espressif/esp-idf.git
+cd esp-idf && ./install.sh esp32
 ```
 
-**3. Install the ESP32 toolchain**
-
-```bash
-cd ~/esp/esp-idf
-./install.sh esp32
-```
-
-**4. Add to shell (optional but convenient)**
-
-Add this alias to `~/.zshrc` so you can activate the environment easily:
+Add to `~/.zshrc` for convenience:
 
 ```zsh
 alias get_idf='. ~/esp/esp-idf/export.sh'
 ```
 
-Then activate with `get_idf` whenever you open a new terminal to work on this project.
-
-## Building
+### Build
 
 ```bash
-# Activate ESP-IDF environment first (or run get_idf if you set the alias)
-. ~/esp/esp-idf/export.sh
-
+get_idf   # activate ESP-IDF environment
 cd /path/to/foowrite-core2
 idf.py set-target esp32   # only needed once
 idf.py build
 ```
 
-## Flashing
-
-Plug in the Core2 via USB-C, find its port:
-
-```bash
-ls /dev/cu.*
-```
-
-Then flash and open the serial monitor:
+### Flash (with IDF)
 
 ```bash
 idf.py -p /dev/cu.usbserial-XXXX flash monitor
 ```
 
-## Project Structure
+### Create a release binary
+
+```bash
+./release.sh
+# writes ~/Downloads/foowrite-core2-VERSION.bin
+```
+
+### Run tests (host, no device needed)
+
+```bash
+cd tests && cmake -B build && cmake --build build && ctest --test-dir build
+```
+
+## Project structure
 
 ```
 foowrite-core2/
 ├── main/
-│   ├── main.cpp          # Entry point
-│   ├── axp192.h/cpp      # PMU init (powers display, backlight)
+│   ├── main.cpp          # Entry point, BLE + editor loop
+│   ├── editor.h/cpp      # Vim-like editor core
+│   ├── output.hpp/cpp    # LovyanGFX display renderer
+│   ├── keymap.h/cpp      # Colemak / QWERTY HID keymap
+│   ├── axp192.h/cpp      # AXP192 PMU (backlight, battery, power-off)
+│   ├── sd_storage.h/cpp  # SD card save / load / config
+│   ├── splash.h/cpp      # Generative mountains splash screen
+│   ├── version.h         # FOOWRITE_VERSION string
 │   └── lgfx_config.h     # LovyanGFX display configuration
+├── tests/                # Host-side Google Test suite
+├── release.sh            # Produces merged flash binary for distribution
 └── components/
     └── LovyanGFX/        # Display library (git submodule)
 ```
