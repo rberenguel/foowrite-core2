@@ -4,6 +4,8 @@ Vim-like editor for the M5Stack Core2, built with ESP-IDF (native C/C++).
 
 Straight port (via Claude and Gemini) of the original [foowrite](https://github.com/rberenguel/foowrite) I wrote for the Pi Pico.
 
+<img src="media/pic.jpg" width="600">
+
 ## Hardware
 
 - M5Stack Core2 (ESP32, ILI9342C 320×240 display, AXP192 PMU)
