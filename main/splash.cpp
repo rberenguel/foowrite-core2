@@ -5,6 +5,7 @@
 
 #include "splash.h"
 #include "version.h"
+#include "axp192.h"
 
 #include <math.h>
 #include <vector>
@@ -202,6 +203,23 @@ void draw_splash(LGFX* display) {
     // -----------------------------------------------------------------------
     const uint32_t BLUE = 0x5599FF;  // light cornflower blue (RGB888)
     draw_bt_icon(display, BLUE);
+
+    // Battery percentage — top-right, small font
+    // Green when charging, red when ≤30% (lower threshold than editor: less
+    // load here so the voltage reading is closer to true state of charge),
+    // white otherwise.  ~ prefix indicates approximate reading under load.
+    int  bat_pct  = axp192_get_battery_pct();
+    bool charging = axp192_is_charging();
+    char bat_str[8];
+    snprintf(bat_str, sizeof(bat_str), charging ? "%d%%" : "~%d%%", bat_pct);
+    uint32_t bat_col = charging          ? 0x859900   // solarized green
+                     : (bat_pct <= 30)   ? 0xDC322F   // solarized red
+                                         : 0xFFFFFF;  // white
+    display->setFont(&fonts::Font0);
+    display->setTextSize(1);
+    display->setTextDatum(lgfx::top_right);
+    display->setTextColor(bat_col, TFT_BLACK);
+    display->drawString(bat_str, SCREEN_W - 4, 4);
 }
 
 void draw_bt_icon(LGFX* display, uint32_t color) {

@@ -132,6 +132,12 @@ void axp192_shutdown() {
     axp_set_bits(0x32, 0x80);  // POFF bit — AXP192 cuts all rails immediately
 }
 
+bool axp192_is_charging() {
+    uint8_t val = 0;
+    axp_read(0x00, &val);
+    return (val & 0x20) != 0;  // bit 5 = VBUS present (plugged in via USB)
+}
+
 int axp192_get_battery_pct() {
     uint8_t h, l;
     if (axp_read(0x78, &h) != ESP_OK) return 0;

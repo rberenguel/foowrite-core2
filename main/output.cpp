@@ -40,6 +40,8 @@ static constexpr uint32_t COL_STATUS_BG = 0x073642;  // base02 — status bar ba
 static constexpr uint32_t COL_LABEL_N   = 0x859900;  // green  — "NORMAL" label
 static constexpr uint32_t COL_LABEL_I   = 0x268bd2;  // blue   — "INSERT" label
 static constexpr uint32_t COL_LABEL_C   = 0x2aa198;  // cyan   — "COMMAND" label
+static constexpr uint32_t COL_BAT_LOW   = 0xdc322f;  // red    — battery ≤ 20%
+static constexpr uint32_t COL_BAT_CHG   = 0x859900;  // green  — charging
 
 // ---------------------------------------------------------------------------
 // Double-buffer sprite pair — allocated from PSRAM in Init.
@@ -225,7 +227,7 @@ static int32_t render_to(lgfx::LovyanGFX& g, int32_t ox, int32_t oy,
 // ---------------------------------------------------------------------------
 // Status bar — always drawn directly to the display
 // ---------------------------------------------------------------------------
-static void draw_status(EditorMode mode, const char* msg = nullptr) {
+static void draw_status(EditorMode mode, const char* filename, bool dirty) {
     const char* label;
     uint32_t    label_col;
     switch (mode) {
@@ -247,16 +249,34 @@ static void draw_status(EditorMode mode, const char* msg = nullptr) {
     display.fillRect(0, STATUS_Y, SCREEN_W, STATUS_H, COL_STATUS_BG);
     display.setTextColor(label_col, COL_STATUS_BG);
     display.drawString(label, 4, ty);
-    if (msg) {
-        display.setTextColor(COL_TEXT, COL_STATUS_BG);
-        display.drawString(msg, SCREEN_W / 2, ty);
+
+    // Filename + dirty indicator, centred in the available space
+    if (filename && filename[0] != '\0') {
+        char fbuf[48];
+        if (dirty) {
+            snprintf(fbuf, sizeof(fbuf), "[+] %s", filename);
+        } else {
+            snprintf(fbuf, sizeof(fbuf), "%s", filename);
+        }
+        // Truncate to avoid overwriting the battery reading (~36 px from right)
+        // Use COL_LABEL_I (blue) when dirty, COL_TEXT otherwise
+        int32_t fw = display.textWidth(fbuf);
+        int32_t fx = (SCREEN_W - fw) / 2;
+        if (fx < 72) fx = 72;  // don't overlap the mode label
+        display.setTextColor(dirty ? COL_LABEL_I : COL_TEXT, COL_STATUS_BG);
+        display.drawString(fbuf, fx, ty);
     }
-    
-    // Draw battery percentage on the far right
+
+    // Battery percentage — colour and prefix depend on charging/load state
+    int  bat_pct  = axp192_get_battery_pct();
+    bool charging = axp192_is_charging();
     char bat_str[16];
-    snprintf(bat_str, sizeof(bat_str), "%d%%", axp192_get_battery_pct());
-    display.setFont(&fonts::Font0); // small built-in glcd font
-    display.setTextColor(COL_TEXT, COL_STATUS_BG);
+    snprintf(bat_str, sizeof(bat_str), charging ? "%d%%" : "~%d%%", bat_pct);
+    uint32_t bat_col = charging          ? COL_BAT_CHG
+                     : (bat_pct <= 20)   ? COL_BAT_LOW
+                                         : COL_TEXT;
+    display.setFont(&fonts::Font0);
+    display.setTextColor(bat_col, COL_STATUS_BG);
     display.setTextDatum(lgfx::middle_right);
     display.drawString(bat_str, SCREEN_W - 4, STATUS_Y + STATUS_H / 2);
 }
@@ -356,7 +376,7 @@ void Output::Init(Editor* ed) {
     }
 
     display.fillScreen(COL_BG);
-    draw_status(EditorMode::kNormal);
+    draw_status(EditorMode::kNormal, "", false);
 }
 
 void Output::Emit(const std::string& s, int cursor_pos, EditorMode mode) {
@@ -366,7 +386,11 @@ void Output::Emit(const std::string& s, int cursor_pos, EditorMode mode) {
         render_to(display, TEXT_X, TEXT_Y, s, cursor_pos, mode,
                   &prev_line_start_, &next_line_start_);
         display.endWrite();
-        draw_status(mode);
+        if (editor_) {
+            status_filename_ = editor_->GetFilename();
+            status_dirty_    = editor_->IsDirty();
+        }
+        draw_status(mode, status_filename_.c_str(), status_dirty_);
         return;
     }
 
@@ -409,7 +433,11 @@ void Output::Emit(const std::string& s, int cursor_pos, EditorMode mode) {
     // Swap buffers: front becomes the new "previous frame" reference.
     s_curr = 1 - s_curr;
 
-    draw_status(mode);
+    if (editor_) {
+        status_filename_ = editor_->GetFilename();
+        status_dirty_    = editor_->IsDirty();
+    }
+    draw_status(mode, status_filename_.c_str(), status_dirty_);
 }
 
 void Output::CommandLine(const std::list<char>& s) {
@@ -434,7 +462,7 @@ void Output::Command(const OutputCommands& cmd) {
             draw_splash(&display);
             break;
         case OutputCommands::kCommandMode:
-            draw_status(EditorMode::kNormal);
+            draw_status(EditorMode::kNormal, status_filename_.c_str(), status_dirty_);
             break;
         case OutputCommands::kFlush:
             break;

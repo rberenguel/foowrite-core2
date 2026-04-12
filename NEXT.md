@@ -4,207 +4,88 @@
 
 ## ✅ Config file (`/sd/config.txt`) — done
 
-Properties `layout: colemak|qwerty` and `brightness: 1-100`.  Applied at startup
-and re-applied on every BLE reconnect (so `:q` + reconnect picks up edits).
-Version `0.1.0` is shown on the splash screen below the title in the small bitmap font.
+Properties `layout: colemak|qwerty`, `brightness: 1-100`, `rotation: 1|-1`.
+Applied at startup (`apply_config()` in `main.cpp:39`) and re-applied on every BLE
+reconnect so that `:q` + reconnect picks up edits.
+Version `0.1.0` is shown on the splash screen.
 
 ---
 
-## 1. `:e` with no argument → show file listing
+## ✅ `:e` with no argument → show file listing — done
 
-When the user types `:e` and presses Enter without a filename, show all non-hidden
-`.txt` files on the SD card so they know what to open.
-
-### sd_storage.h — add
-
-```cpp
-// Returns filenames (without .txt extension) for all non-hidden .txt files
-// in /sd/.  Returns empty vector if SD is not mounted or directory is empty.
-std::vector<std::string> sd_list();
-```
-
-### sd_storage.cpp — add
-
-```cpp
-#include <dirent.h>
-
-std::vector<std::string> sd_list() {
-    std::vector<std::string> files;
-    if (!s_mounted) return files;
-    DIR* dir = opendir("/sd");
-    if (!dir) return files;
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
-        std::string name(entry->d_name);
-        if (name.empty() || name[0] == '.') continue;      // skip hidden
-        auto dot = name.rfind(".txt");
-        if (dot == std::string::npos) continue;            // .txt files only
-        files.push_back(name.substr(0, dot));
-    }
-    closedir(dir);
-    return files;
-}
-```
-
-### editor.cpp — update `:e` handler
-
-Replace the current `command.rfind(":e ", 0) == 0` block with two cases:
-
-```cpp
-// :e <filename> — load file
-if (command.rfind(":e ", 0) == 0) {
-    auto arg = command.substr(3);
-    while (!arg.empty() && arg[0] == ' ') arg.erase(0, 1);
-    std::string err;
-    if (sd_load(arg.c_str(), document_, err)) {
-        filename_ = arg;
-        row_ = document_.begin();
-        current_line_ = *row_;
-        ncolumn_ = 0;
-        mode_ = EditorMode::kNormal;
-        output_->Emit(current_line_, ncolumn_, mode_);
-        output_->CommandLine("loaded: " + filename_);
-    } else {
-        output_->CommandLine("error: " + err);
-    }
-}
-
-// :e alone — show directory listing
-if (command == ":e") {
-    auto files = sd_list();
-    if (files.empty()) {
-        output_->CommandLine(": (no files on sd)");
-    } else {
-        std::string listing = ":";
-        for (const auto& f : files) listing += " " + f;
-        output_->CommandLine(listing);
-    }
-    // Stay in command-line mode so user can type :e <filename>
-    mode_ = EditorMode::kCommandLineMode;
-    std::list<char> prompt = {':', 'e', ' '};
-    command_line_ = prompt;
-    output_->CommandLine(command_line_);
-}
-```
-
-The listing is shown in the status bar (`CommandLine`), then the cursor drops into a
-fresh `:e ` prompt so the user can immediately type the filename.
+Implemented in `editor.cpp:529`.  Replaces the document with a listing of all
+`.txt` files on the SD card and drops into a fresh `:e ` prompt so the user can
+type the filename to open directly.  (Marked risky in prior notes — verify on device.)
 
 ---
 
-## 2. Config file on startup
+## ✅ 1. Dirty flag + filename in the modeline — done
 
-Read `/sd/config.txt` after `sd_init()` and apply `layout` and `brightness` settings.
-Re-read on every BLE reconnect so that `:q` → reconnect picks up any edits.
-
-### File format
-
-```
-# foowrite config
-layout: colemak     # can also be qwerty
-brightness: 50      # 0-100  (never actually set to 0)
-```
-
-Rules: lines starting with `#` or blank are ignored.  Each property line is
-`key: value` optionally followed by `# comment`.  Leading/trailing whitespace
-around both key and value is stripped.
-
-### sd_storage.h — add
-
-```cpp
-struct FooConfig {
-    bool qwerty     = false;  // false = Colemak (default)
-    int  brightness = 50;     // 0-100
-};
-
-// Load /sd/config.txt and return parsed settings.
-// Returns defaults if the file does not exist or the SD is not mounted.
-FooConfig sd_load_config();
-```
-
-### sd_storage.cpp — add
-
-```cpp
-static std::string trim(const std::string& s) {
-    size_t a = s.find_first_not_of(" \t\r\n");
-    if (a == std::string::npos) return "";
-    size_t b = s.find_last_not_of(" \t\r\n");
-    return s.substr(a, b - a + 1);
-}
-
-FooConfig sd_load_config() {
-    FooConfig cfg;
-    if (!s_mounted) return cfg;
-
-    FILE* f = fopen("/sd/config.txt", "r");
-    if (!f) return cfg;
-
-    char buf[128];
-    while (fgets(buf, sizeof(buf), f)) {
-        std::string line = trim(buf);
-        if (line.empty() || line[0] == '#') continue;
-
-        // Strip inline comment
-        auto comment = line.find('#');
-        if (comment != std::string::npos) line = line.substr(0, comment);
-
-        auto colon = line.find(':');
-        if (colon == std::string::npos) continue;
-
-        std::string key = trim(line.substr(0, colon));
-        std::string val = trim(line.substr(colon + 1));
-
-        if (key == "layout") {
-            cfg.qwerty = (val == "qwerty");
-        } else if (key == "brightness") {
-            int v = atoi(val.c_str());
-            cfg.brightness = v < 1 ? 1 : v > 100 ? 100 : v;
-        }
-    }
-    fclose(f);
-    return cfg;
-}
-```
-
-### main.cpp — apply config at startup and on reconnect
-
-```cpp
-static void apply_config() {
-    FooConfig cfg = sd_load_config();
-    g_use_qwerty = cfg.qwerty;
-    axp192_set_lcd_backlight((cfg.brightness * 255) / 100);
-}
-```
-
-Call `apply_config()` once after `sd_init()`, and again inside
-`draw_connected_screen()` (which runs on every BLE connect event, including after
-`:q` + reconnect):
-
-```cpp
-static void draw_connected_screen() {
-    apply_config();          // ← re-read config on every connect
-    draw_bt_icon(&display, TFT_GREEN);
-    vTaskDelay(pdMS_TO_TICKS(800));
-    display.fillScreen(TFT_BLACK);
-    g_editor.Refresh();
-}
-```
-
-### Autodocumented default config
-
-Ship a `/sd/config.txt` with this content so users have a template:
-
-```
-# foowrite config — edit and reconnect to apply
-
-layout: colemak     # can also be: qwerty
-brightness: 50      # 0-100 (0 is treated as 1 to keep backlight on)
-```
+`editor.h`: added `dirty_` field, `IsDirty()` and `GetFilename()` accessors.
+`editor.cpp`: `dirty_ = true` on all insert/delete/enter operations; cleared on
+successful `:w` and on `:e <file>` load.
+`output.cpp`: `draw_status()` now accepts filename + dirty; shows `[+] filename`
+centred between the mode label and battery.  `[+]` is rendered in `COL_LABEL_I`
+(blue) when dirty.  `Output` caches the last values so the status bar stays correct
+after ESC-to-Normal.
 
 ---
 
-## Future (not blocking usability)
+## ✅ 2. Key repeat for arrows and backspace — done
 
-WiFi / WPA for wireless document transfer would be convenient (no SD swapping), but
-the WPA supplicant stack is large enough to eat meaningfully into PSRAM headroom.
-Not worth pursuing until the document editing experience is solid.
+Root cause was in `ble_hid_host.cpp`: the `keycode != s_last_keycode` guard
+swallowed repeat events when a keyboard re-sent the same keycode without an
+intervening key-up report.  Fixed by whitelisting
+`KEY_LEFT/RIGHT/UP/DOWN/BACKSPACE/DELETE` to bypass the deduplication check, so
+all hardware repeats reach the editor queue.
+
+---
+
+## 3. Folders
+
+Create, navigate, go up/back.  Needed once you have more than a handful of files.
+Depends on `:e` listing being stable (item above).
+
+**Approach**: extend `sd_list()` to also return subdirectory names (marked with `/`
+suffix).  In the `:e` listing view, pressing Enter on a directory item changes the
+working directory; pressing Enter on a file opens it.  Keep a path stack for `..`.
+
+---
+
+## 4. 3 buffers mapped to the physical buttons
+
+The M5Stack Core2 has 3 capacitive touch zones at the bottom.
+
+| Button | Buffer |
+|--------|--------|
+| Left   | `scratch.txt` — permanent scratchpad |
+| Middle | current file (whatever was last opened) |
+| Right  | `<current>-notes.txt` — auto-created on first tap |
+
+Switching saves the current file if dirty (or to a `.swp` temp file) and loads
+the target.  Only one buffer is in RAM at a time; we just track three filenames.
+
+---
+
+## 5. Markdown-ish rendering
+
+Different colours for `#` headers (solarized rainbow by level), bold, italic.
+Folded headers show as `>` / `>>` / `>>>` etc.
+
+Requires touching `render_to()` in `output.cpp` to tokenise the line before
+drawing it character-by-character (colour state machine).
+
+---
+
+## 6. Outline jumping mode
+
+Jump between `#` headers.  Build on folder/buffer work (item 3/4) so navigation
+feels consistent.  Essential for documents over ~5k words.
+
+---
+
+## 7. Non-modal editing (not critical)
+
+Lightweight menu + non-modal option, selectable from config.  Requires a registry
+of ex-commands so they work in both modes.  Low priority — the device targets
+vim-fluent writers.

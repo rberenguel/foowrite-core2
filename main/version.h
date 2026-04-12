@@ -1,3 +1,3 @@
 #pragma once
 
-#define FOOWRITE_VERSION "0.1.0"
+#define FOOWRITE_VERSION "0.1.1"

@@ -15,3 +15,8 @@ typedef void (*ble_hid_status_cb_t)(ble_hid_status_t status);
 // key_queue : queue to push key_event_t into on each keypress
 // status_cb : called on connect/disconnect (may be NULL)
 void ble_hid_init(QueueHandle_t key_queue, ble_hid_status_cb_t status_cb);
+
+// Returns the most-recently-seen HID keycode (0 = no key / key released).
+// Safe to call from any task — single-byte read, no locking needed.
+// Use this to detect whether a key is still physically held for soft repeat.
+uint8_t ble_hid_current_keycode(void);

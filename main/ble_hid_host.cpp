@@ -113,7 +113,17 @@ static void handle_hid_report(uint16_t attr_handle, const uint8_t *data, uint16_
         if (rpt[i] > 0x01) { keycode = rpt[i]; break; }
     }
 
-    if (keycode != 0 && keycode != s_last_keycode) {
+    // Keys that should allow hardware repeat even when the keyboard re-sends
+    // the same keycode without an intervening key-up report.
+    static const uint8_t k_repeatable[] = {
+        KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_BACKSPACE, KEY_DELETE
+    };
+    bool repeatable = false;
+    for (size_t i = 0; i < sizeof(k_repeatable); i++) {
+        if (keycode == k_repeatable[i]) { repeatable = true; break; }
+    }
+
+    if (keycode != 0 && (keycode != s_last_keycode || repeatable)) {
         key_event_t evt = {keycode, mods};
         xQueueSend(s_key_queue, &evt, 0);
     }
@@ -467,6 +477,10 @@ static void nimble_host_task(void *param) {
 // ---------------------------------------------------------------------------
 // Public init
 // ---------------------------------------------------------------------------
+
+uint8_t ble_hid_current_keycode(void) {
+    return s_last_keycode;
+}
 
 void ble_hid_init(QueueHandle_t key_queue, ble_hid_status_cb_t status_cb) {
     s_key_queue = key_queue;

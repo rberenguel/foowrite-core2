@@ -34,4 +34,8 @@ class Output {
     int   prev_line_start_ = -1;
     int   next_line_start_ = -1;
     Editor* editor_ = nullptr;
+
+    // Cached for draw_status calls that happen outside Emit (e.g. ESC to Normal)
+    std::string status_filename_;
+    bool        status_dirty_ = false;
 };

@@ -21,9 +21,59 @@ static const char *TAG = "main";
 // Shared queue — BLE writes, editor reads
 QueueHandle_t g_key_queue = NULL;
 
+// ---------------------------------------------------------------------------
+// Software key-repeat
+// Keys that should repeat when held (arrows, backspace, delete).
+// The BLE host sends one event per physical press; the OS-side repeat that
+// desktop systems provide simply doesn't exist here, so we synthesise it.
+// ---------------------------------------------------------------------------
+static constexpr uint8_t k_repeat_keys[] = {
+    KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_BACKSPACE, KEY_DELETE
+};
+static constexpr int RPT_DELAY_MS    = 400;  // hold duration before first repeat
+static constexpr int RPT_INTERVAL_MS = 60;   // interval between subsequent repeats
+
+static uint8_t  s_rpt_key      = 0;
+static int64_t  s_rpt_first_ms = 0;
+static int64_t  s_rpt_last_ms  = 0;
+static bool     s_rpt_active   = false;
+
+static bool is_repeat_key(uint8_t kc) {
+    for (auto k : k_repeat_keys) if (k == kc) return true;
+    return false;
+}
+
 LGFX   display;   // extern'd by output.cpp for display rendering
 static Output g_output;
 static Editor g_editor;
+
+static void check_soft_repeat() {
+    uint8_t held = ble_hid_current_keycode();
+    int64_t now  = esp_timer_get_time() / 1000;  // µs → ms
+
+    if (held != s_rpt_key) {
+        // Key changed (new press or released) — reset repeat state
+        s_rpt_key      = held;
+        s_rpt_first_ms = now;
+        s_rpt_last_ms  = now;
+        s_rpt_active   = false;
+        return;
+    }
+    if (held == 0 || !is_repeat_key(held)) return;
+
+    if (!s_rpt_active) {
+        if (now - s_rpt_first_ms >= RPT_DELAY_MS) {
+            s_rpt_active  = true;
+            s_rpt_last_ms = now;
+            KeyModifiers no_mods = {};
+            g_editor.ProcessKey(held, &no_mods, false);
+        }
+    } else if (now - s_rpt_last_ms >= RPT_INTERVAL_MS) {
+        s_rpt_last_ms = now;
+        KeyModifiers no_mods = {};
+        g_editor.ProcessKey(held, &no_mods, false);
+    }
+}
 
 // Status updated from BLE task, read from main loop
 static std::atomic<ble_hid_status_t> g_ble_status{BLE_HID_SCANNING};
@@ -88,7 +138,9 @@ extern "C" void app_main(void) {
     ble_hid_init(g_key_queue, on_ble_status);
 
     // 6. Main loop (Core 1) — editor loop
-    ble_hid_status_t last_status = BLE_HID_SCANNING;
+    ble_hid_status_t last_status   = BLE_HID_SCANNING;
+    int64_t          last_splash_ms = 0;
+    static constexpr int64_t SPLASH_REFRESH_MS = 30000;  // refresh battery every 30s
 
     while (true) {
         ble_hid_status_t status = g_ble_status.load();
@@ -101,8 +153,19 @@ extern "C" void app_main(void) {
             } else {
                 g_editor.ProcessEvent(EV_BT_OFF);
                 draw_scanning_screen();
+                last_splash_ms = esp_timer_get_time() / 1000;
             }
             last_status = status;
+        }
+
+        // Periodically refresh the splash while scanning so the battery
+        // reading stays current without needing a keyboard to be attached.
+        if (status == BLE_HID_SCANNING) {
+            int64_t now_ms = esp_timer_get_time() / 1000;
+            if (now_ms - last_splash_ms >= SPLASH_REFRESH_MS) {
+                draw_scanning_screen();
+                last_splash_ms = now_ms;
+            }
         }
 
         // Feed queued keypresses to the editor
@@ -111,5 +174,8 @@ extern "C" void app_main(void) {
             bool batched = uxQueueMessagesWaiting(g_key_queue) > 0;
             g_editor.ProcessKey(evt.keycode, &evt.modifiers, batched);
         }
+
+        // Synthesise key-repeat for navigation/delete keys
+        check_soft_repeat();
     }
 }

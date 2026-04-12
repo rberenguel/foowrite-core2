@@ -97,6 +97,29 @@ idf.py -p /dev/cu.usbserial-XXXX flash monitor
 cd tests && cmake -B build && cmake --build build && ctest --test-dir build
 ```
 
+## Battery indicator
+
+The battery percentage is shown in two places:
+
+**Splash screen** (top-right corner) — displayed before BLE scanning starts, so the
+load is lower and the reading is closer to true state of charge.
+
+**Status bar** (bottom-right, visible while editing) — displayed under full load
+(ESP32 + BLE + display), so the reading is typically 10–15% lower than actual.
+
+| Appearance | Meaning |
+|------------|---------|
+| `82%` green | Charging via USB |
+| `~82%` white/grey | On battery, reading is approximate (`~` = under load) |
+| `~18%` red | Low battery: ≤ 20% in editor (under load), ≤ 30% on splash |
+
+The voltage-based percentage is a linear approximation of the LiPo discharge curve
+and is inherently noisy under varying load.  Use the splash screen value (power on
+without connecting the keyboard) for the most consistent readings when tracking
+battery drain over time.  Power off via `:qq` or a long press of the physical button.
+
+---
+
 ## Project structure
 
 ```

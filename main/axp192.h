@@ -50,8 +50,11 @@ void axp192_set_lcd_backlight(uint8_t brightness);
 // Enable/disable the 5V boost (bus power, speaker, etc.)
 void axp192_set_exten(bool enable);
 
-// Get battery level (0-100%)
+// Get battery level (0-100%) — voltage-based, approximate under load
 int axp192_get_battery_pct();
+
+// Returns true if the battery is currently charging (VBUS present and charging)
+bool axp192_is_charging();
 
 // Cut all power rails — device powers off immediately.
 void axp192_shutdown();

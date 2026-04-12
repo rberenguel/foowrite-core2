@@ -186,6 +186,7 @@ void Editor::ProcessCommand(char c, KeyModifiers* modifiers) {
                 while (end <= (int)current_line_.size() - 1 && current_line_[end] != ' ') ++end;
                 current_line_.erase(start, end - start);
                 ncolumn_ = fmin(ncolumn_, (int)current_line_.size());
+                dirty_ = true;
                 break;
             }
             if (command_line_str == "di") {
@@ -195,6 +196,7 @@ void Editor::ProcessCommand(char c, KeyModifiers* modifiers) {
                 if (start < (int)current_line_.size() - 1) ++start;
                 while (end <= (int)current_line_.size() - 1 && current_line_[end] != ' ') ++end;
                 current_line_.erase(start, end - start);
+                dirty_ = true;
                 break;
             }
             if (command_line_str == "ca") {
@@ -242,6 +244,7 @@ void Editor::ProcessCommand(char c, KeyModifiers* modifiers) {
                     if (row_ != document_.end()) *row_ = "";
                 }
                 ncolumn_ = 0;
+                dirty_ = true;
                 command_line_ = {};
             } else {
                 command_line_.emplace_back('d');
@@ -252,6 +255,7 @@ void Editor::ProcessCommand(char c, KeyModifiers* modifiers) {
             if (command_line_str == "d") {
                 ncolumn_ = fmax(--ncolumn_, 0);
                 current_line_.erase(ncolumn_, current_line_.size() - ncolumn_);
+                dirty_ = true;
                 command_line_.clear();
             } else if (command_line_str == "c") {
                 DispatchCommand("d$a");
@@ -406,6 +410,7 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
         switch (key) {
             case KEY_ENTER:
                 HandleEnter();
+                dirty_ = true;
                 output_->Emit(current_line_, ncolumn_, mode_);
                 break;
             case KEY_ESC:
@@ -420,6 +425,7 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
                 ncolumn_ = fmax(0, --ncolumn_);
                 std::advance(begin_line, ncolumn_);
                 current_line_.erase(begin_line);
+                dirty_ = true;
                 if (!batched) output_->Emit(current_line_, ncolumn_, mode_);
                 break;
             case KEY_SPACE:
@@ -429,6 +435,7 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
                 if (c == '\0') break;
                 current_line_.insert(ncolumn_, 1, c);
                 ncolumn_++;
+                dirty_ = true;
                 if (!batched) output_->Emit(current_line_, ncolumn_, mode_);
         }
         return;
@@ -491,6 +498,7 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
                         "hull was a tapestry of interwoven bark and leaves, its decks a "
                         "network of branches and vines. Sunlight filtered through the "
                         "canopy, casting dappled shadows on the mossy floor.");
+                    dirty_ = true;
                     UpdateCurrentLine(-1);
                     output_->Emit(current_line_, ncolumn_, mode_);
                 }
@@ -503,6 +511,7 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
 
                     std::string err;
                     if (sd_save(filename_.c_str(), document_, err)) {
+                        dirty_ = false;
                         output_->CommandLine("saved: " + filename_);
                     } else {
                         output_->CommandLine("error: " + err);
@@ -514,6 +523,7 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
                     std::string err;
                     if (sd_load(arg.c_str(), document_, err)) {
                         filename_ = arg;
+                        dirty_ = false;
                         row_ = document_.begin();
                         current_line_ = *row_;
                         ncolumn_ = 0;
@@ -537,6 +547,7 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
                         for (const auto& f : files) document_.push_back("- " + f);
                     }
                     filename_ = "";
+                    dirty_ = false;
                     row_ = document_.begin();
                     current_line_ = *row_;
                     ncolumn_ = 0;

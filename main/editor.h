@@ -32,6 +32,9 @@ class Editor {
     // Used by Output to fill remaining screen space with read-only context.
     std::vector<std::string> GetFollowingLines(int n) const;
 
+    bool               IsDirty()    const { return dirty_; }
+    const std::string& GetFilename() const { return filename_; }
+
     void ResetState() {
         current_line_.clear();
         ncolumn_ = 0;
@@ -62,5 +65,6 @@ class Editor {
     std::list<std::string> document_;
     EditorMode        mode_;
     bool              should_save_ = false;
+    bool              dirty_       = false;
     std::string       filename_ = "untitled";
 };
