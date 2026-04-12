@@ -93,6 +93,28 @@ std::vector<std::string> sd_list() {
 }
 
 // ---------------------------------------------------------------------------
+// Battery calibration
+// ---------------------------------------------------------------------------
+
+float sd_load_bat_max_mv() {
+    if (!s_mounted) return 0;
+    FILE* f = fopen("/sd/.bat_max_mv", "r");
+    if (!f) return 0;
+    float mv = 0;
+    fscanf(f, "%f", &mv);
+    fclose(f);
+    return (mv > 3000.0f && mv <= 4300.0f) ? mv : 0;
+}
+
+void sd_save_bat_max_mv(float mv) {
+    if (!s_mounted) return;
+    FILE* f = fopen("/sd/.bat_max_mv", "w");
+    if (!f) return;
+    fprintf(f, "%.1f\n", mv);
+    fclose(f);
+}
+
+// ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 

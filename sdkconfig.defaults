@@ -15,8 +15,17 @@ CONFIG_SPIRAM_USE_MALLOC=y
 # CONFIG_PARTITION_TABLE_CUSTOM=y
 # CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
-# FreeRTOS tick rate (1kHz for good responsiveness)
-CONFIG_FREERTOS_HZ=1000
+# FreeRTOS tick rate — 100Hz is sufficient; 1kHz prevents light-sleep and wastes power
+CONFIG_FREERTOS_HZ=100
+
+# CPU & power management
+# 80MHz is more than sufficient for BLE HID + text rendering
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=80
+# Enable PM so esp_pm_configure can engage automatic light-sleep between ticks
+CONFIG_PM_ENABLE=y
+# Required for light sleep with NimBLE
+CONFIG_BT_NIMBLE_SLEEP_ENABLE=y
 
 # Stack sizes
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192

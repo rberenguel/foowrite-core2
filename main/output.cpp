@@ -271,10 +271,13 @@ static void draw_status(EditorMode mode, const char* filename, bool dirty) {
     int  bat_pct  = axp192_get_battery_pct();
     bool charging = axp192_is_charging();
     char bat_str[16];
-    snprintf(bat_str, sizeof(bat_str), charging ? "%d%%" : "~%d%%", bat_pct);
-    uint32_t bat_col = charging          ? COL_BAT_CHG
-                     : (bat_pct <= 20)   ? COL_BAT_LOW
-                                         : COL_TEXT;
+    if (bat_pct < 0)
+        snprintf(bat_str, sizeof(bat_str), charging ? "?%%" : "~?%%");
+    else
+        snprintf(bat_str, sizeof(bat_str), charging ? "%d%%" : "~%d%%", bat_pct);
+    uint32_t bat_col = charging               ? COL_BAT_CHG
+                     : (bat_pct >= 0 && bat_pct <= 20) ? COL_BAT_LOW
+                                                       : COL_TEXT;
     display.setFont(&fonts::Font0);
     display.setTextColor(bat_col, COL_STATUS_BG);
     display.setTextDatum(lgfx::middle_right);

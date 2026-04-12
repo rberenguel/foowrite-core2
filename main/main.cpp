@@ -4,6 +4,7 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "esp_log.h"
+#include "esp_pm.h"
 
 #include "axp192.h"
 #include "lgfx_config.h"
@@ -112,6 +113,15 @@ static void draw_connected_screen(void) {
 // ---------------------------------------------------------------------------
 
 extern "C" void app_main(void) {
+    // 0. Power management — allow CPU to drop to 80MHz and light-sleep between ticks.
+    //    With xQueueReceive(50ms) the CPU is idle ~99% of the time; without this it
+    //    spins at 160MHz burning ~80mA extra for no reason.
+    esp_pm_config_t pm = {};
+    pm.max_freq_mhz  = 80;
+    pm.min_freq_mhz  = 80;   // keep stable for BLE timing; no dynamic scaling
+    pm.light_sleep_enable = true;
+    esp_pm_configure(&pm);
+
     // 1. Power on peripherals
     axp192_init(nullptr);
 
@@ -123,6 +133,27 @@ extern "C" void app_main(void) {
     if (!sd_init()) {
         ESP_LOGW(TAG, "SD card not found or mount failed");
     }
+
+    // Load max battery voltage for calibration; update if this boot is a new high.
+    // Pre-BLE is the least-loaded voltage reading we get.
+    // Skip update when charging — charger elevates voltage artificially.
+    {
+        float max_mv   = sd_load_bat_max_mv();
+        float cur_mv   = axp192_read_voltage_mv();
+        bool  charging = axp192_is_charging();
+        ESP_LOGI(TAG, "bat cal: max_mv=%.1f cur_mv=%.1f charging=%d", max_mv, cur_mv, charging);
+        axp192_set_bat_max_mv(max_mv);
+        if (!charging) {
+            if (cur_mv > max_mv) {
+                axp192_set_bat_max_mv(cur_mv);
+                sd_save_bat_max_mv(cur_mv);
+                ESP_LOGI(TAG, "bat cal: saved new max %.1f mV", cur_mv);
+            }
+        } else {
+            ESP_LOGI(TAG, "bat cal: skipping save (charging)");
+        }
+    }
+
     apply_config();
 
     ESP_LOGI(TAG, "Display initialised: %dx%d", (int)display.width(), (int)display.height());

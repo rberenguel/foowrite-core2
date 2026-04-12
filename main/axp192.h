@@ -50,11 +50,17 @@ void axp192_set_lcd_backlight(uint8_t brightness);
 // Enable/disable the 5V boost (bus power, speaker, etc.)
 void axp192_set_exten(bool enable);
 
-// Get battery level (0-100%) — voltage-based, approximate under load
-int axp192_get_battery_pct();
-
-// Returns true if the battery is currently charging (VBUS present and charging)
+// Returns true if the battery is currently charging (reg 0x00 bit 2)
 bool axp192_is_charging();
+
+// Read raw battery voltage in millivolts.
+float axp192_read_voltage_mv();
+
+// Set the max voltage ever seen on battery (loaded from SD by main, after sd_init).
+void axp192_set_bat_max_mv(float max_mv);
+
+// Get battery level 0-100%, or -1 if on VBUS and not yet anchored.
+int axp192_get_battery_pct();
 
 // Cut all power rails — device powers off immediately.
 void axp192_shutdown();

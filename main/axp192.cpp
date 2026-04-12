@@ -21,6 +21,15 @@ static esp_err_t axp_read(uint8_t reg, uint8_t *val) {
     return i2c_master_transmit_receive(s_dev, &reg, 1, val, 1, pdMS_TO_TICKS(10));
 }
 
+static esp_err_t axp_read32(uint8_t reg, uint32_t *val) {
+    uint8_t buf[4];
+    esp_err_t err = i2c_master_transmit_receive(s_dev, &reg, 1, buf, 4, pdMS_TO_TICKS(10));
+    if (err != ESP_OK) return err;
+    *val = ((uint32_t)buf[0] << 24) | ((uint32_t)buf[1] << 16) |
+           ((uint32_t)buf[2] << 8)  |  (uint32_t)buf[3];
+    return ESP_OK;
+}
+
 static esp_err_t axp_set_bits(uint8_t reg, uint8_t mask) {
     uint8_t val;
     esp_err_t err = axp_read(reg, &val);
@@ -90,6 +99,9 @@ void axp192_init(i2c_master_bus_handle_t *out_bus_handle) {
     // --- ADC: enable all voltage/current measurements ---
     axp_write(AXP192_REG_ADC_ENABLE1, 0xFF);
 
+    // --- Coulomb counter: enable ---
+    axp_write(0xB8, 0x80);
+
     // --- VBUS: limit to 500mA ---
     axp_write(AXP192_REG_VBUS_IPSOUT_CTL, 0xA0);
 
@@ -135,19 +147,59 @@ void axp192_shutdown() {
 bool axp192_is_charging() {
     uint8_t val = 0;
     axp_read(0x00, &val);
-    return (val & 0x20) != 0;  // bit 5 = VBUS present (plugged in via USB)
+    return (val & 0x04) != 0;  // reg 0x00 bit 2: charging indicator (M5Core2 AXP192.cpp)
+}
+
+// M5Core2 battery capacity: 390 mAh
+#define BAT_CAPACITY_MAH 390.0f
+
+// Coulomb counter: 65536 * 0.5 / 3600 / 25 = 0.3641 mAh per LSB (from M5Core2 AXP192.cpp)
+#define COULOMB_LSB_MAH  (65536.0f * 0.5f / 3600.0f / 25.0f)
+
+static bool  s_anchored       = false;
+static int   s_bat_pct_anchor = 0;
+static float s_coulomb_anchor = 0;
+static float s_max_mv         = 0;   // set by axp192_set_bat_max_mv() from main
+
+static float coulomb_net_mah() {
+    uint32_t coin = 0, coout = 0;
+    axp_read32(0xB0, &coin);
+    axp_read32(0xB4, &coout);
+    return (float)(coin - coout) * COULOMB_LSB_MAH;
+}
+
+float axp192_read_voltage_mv() {
+    uint8_t h = 0, l = 0;
+    axp_read(0x78, &h);
+    axp_read(0x79, &l);
+    return ((uint32_t)h << 4 | (l & 0x0F)) * 1.1f;
+}
+
+void axp192_set_bat_max_mv(float max_mv) {
+    s_max_mv = max_mv;
 }
 
 int axp192_get_battery_pct() {
-    uint8_t h, l;
-    if (axp_read(0x78, &h) != ESP_OK) return 0;
-    if (axp_read(0x79, &l) != ESP_OK) return 0;
+    if (!s_anchored) {
+        float cur_mv = axp192_read_voltage_mv();
+        int pct;
+        if (s_max_mv > 0) {
+            pct = (int)(cur_mv / s_max_mv * 100.0f);
+        } else {
+            pct = (cur_mv <= 3200.0f) ? 0
+                : (cur_mv >= 4150.0f) ? 100
+                : (int)((cur_mv - 3200.0f) / 9.5f);
+        }
+        if (pct > 100) pct = 100;
+        if (pct < 0)   pct = 0;
+        s_bat_pct_anchor = pct;
+        s_coulomb_anchor = coulomb_net_mah();
+        s_anchored       = true;
+    }
 
-    // According to AXP192 datasheet, ADC data is 12-bit
-    uint32_t val = (h << 4) | l;
-    float mv = val * 1.1f;
-
-    if (mv >= 4150.0f) return 100;
-    if (mv <= 3200.0f) return 0;
-    return (int)((mv - 3200.0f) / 9.5f);
+    float delta_mah = coulomb_net_mah() - s_coulomb_anchor;
+    int pct = s_bat_pct_anchor + (int)(delta_mah / BAT_CAPACITY_MAH * 100.0f);
+    if (pct > 100) pct = 100;
+    if (pct < 0)   pct = 0;
+    return pct;
 }

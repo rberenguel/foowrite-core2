@@ -36,3 +36,8 @@ bool sd_load(const char* filename,
 // Returns filenames (without .txt extension) for all non-hidden .txt files
 // in /sd/.  Returns empty vector if SD is not mounted or directory is empty.
 std::vector<std::string> sd_list();
+
+// Load/save the max battery voltage (mV) used for charge calibration.
+// Returns 0 if not found or SD not mounted.
+float sd_load_bat_max_mv();
+void  sd_save_bat_max_mv(float mv);
