@@ -7,7 +7,11 @@
 
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
+#ifdef FOOWRITE_BOARD_WAVESHARE349
+#include "driver/sdmmc_host.h"
+#else
 #include "driver/sdspi_host.h"
+#endif
 
 static sdmmc_card_t* s_card = nullptr;
 static bool          s_mounted = false;
@@ -19,14 +23,29 @@ bool sd_init() {
         .allocation_unit_size   = 16 * 1024,
     };
 
+#ifdef FOOWRITE_BOARD_WAVESHARE349
+    // Waveshare: SD on SDMMC 1-bit (CLK=41, CMD=39, D0=40), separate from display SPI
+    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+    host.flags        = SDMMC_HOST_FLAG_1BIT;
+    sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT();
+    slot.clk  = GPIO_NUM_41;
+    slot.cmd  = GPIO_NUM_39;
+    slot.d0   = GPIO_NUM_40;
+    slot.d1   = GPIO_NUM_NC;
+    slot.d2   = GPIO_NUM_NC;
+    slot.d3   = GPIO_NUM_NC;
+    slot.width = 1;
+    esp_err_t err = esp_vfs_fat_sdmmc_mount("/sd", &host, &slot, &cfg, &s_card);
+#else
+    // Core2: SD on SPI3_HOST (shared with display), CS=GPIO4
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
-    host.slot = SPI3_HOST;  // shared with display
-
+    host.slot = SPI3_HOST;
     sdspi_device_config_t slot = SDSPI_DEVICE_CONFIG_DEFAULT();
     slot.host_id = SPI3_HOST;
     slot.gpio_cs = GPIO_NUM_4;
-
     esp_err_t err = esp_vfs_fat_sdspi_mount("/sd", &host, &slot, &cfg, &s_card);
+#endif
+
     s_mounted = (err == ESP_OK);
     return s_mounted;
 }

@@ -5,7 +5,7 @@
 
 #include "splash.h"
 #include "version.h"
-#include "axp192.h"
+#include "board.h"
 
 #include <math.h>
 #include <vector>
@@ -46,30 +46,35 @@ static Pt ir45(Pt pt) {
 }
 
 // ---------------------------------------------------------------------------
-// Coordinate scaling: original 128×64 → Core2 320×240
+// Coordinate scaling: original 128×64 → display dimensions at draw time
 //
-// Mountains occupy the top GROUND_Y pixels; bottom 50px are left for status.
+// All geometry is derived from the actual display size so the splash works
+// on both the Core2 (320×240) and the Waveshare (640×172).
 // ---------------------------------------------------------------------------
 
-static const int SCREEN_W  = 320;
-static const int SCREEN_H  = 240;
-static const int GROUND_Y  = 190;   // y-coordinate of mountain base line
-static const int STATUS_Y  = 198;   // first line available for caller text
+// Module-level vars set at the top of draw_splash(); used by sx()/sy().
+static float g_SX = 2.5f;
+static float g_SY = 2.97f;
 
-static const float SX = SCREEN_W / 128.0f;        // ≈ 2.5
-static const float SY = GROUND_Y / 64.0f;         // ≈ 2.97
-
-static inline int sx(int x) { return (int)(x * SX + 0.5f); }
-static inline int sy(int y) { return (int)(y * SY + 0.5f); }
+static inline int sx(int x) { return (int)(x * g_SX + 0.5f); }
+static inline int sy(int y) { return (int)(y * g_SY + 0.5f); }
 
 // ---------------------------------------------------------------------------
 // Main draw function
 // ---------------------------------------------------------------------------
 
-void draw_splash(LGFX* display) {
+void draw_splash(lgfx::LovyanGFX* display) {
     // Seed from hardware RNG + timer for variety
     s_seed = (int)((esp_timer_get_time() ^ (int64_t)esp_random()) & 0x7FFFFFFF);
     fastrand(hrand(100) + 1);  // jiggle
+
+    const int SCREEN_W = (int)display->width();
+    const int SCREEN_H = (int)display->height();
+    // Mountains occupy the top ~79% of height; bottom strip holds text/status.
+    const int GROUND_Y = SCREEN_H * 79 / 100;
+    const int STATUS_Y = SCREEN_H * 83 / 100;
+    g_SX = SCREEN_W / 128.0f;
+    g_SY = GROUND_Y / 64.0f;
 
     display->fillScreen(TFT_BLACK);
 
@@ -141,13 +146,13 @@ void draw_splash(LGFX* display) {
     }
 
     // -----------------------------------------------------------------------
-    // "foowrite" title — centred, just above half-screen height
+    // "foowrite" title — centred horizontally, 40% down the screen
     // -----------------------------------------------------------------------
     display->setFont(&fonts::FreeSansBold12pt7b);
     display->setTextDatum(lgfx::baseline_left);
     int tw = display->textWidth("foowrite");
     int tx = (SCREEN_W - tw) / 2;
-    int ty = 95;                      // top of box; baseline at ty+20 ≈ y=115
+    int ty = SCREEN_H * 40 / 100;    // top of box; baseline at ty+20
     display->fillRect(tx - 6, ty, tw + 12, 26, TFT_BLACK);
     display->setTextColor(TFT_WHITE, TFT_BLACK);
     display->setCursor(tx, ty + 20);
@@ -162,12 +167,13 @@ void draw_splash(LGFX* display) {
 
     // -----------------------------------------------------------------------
     // Random inspirational quote — black box overlaid on lower mountains
+    // Limit to 2 lines to fit short displays.
     // -----------------------------------------------------------------------
     int threshold = hrand(10);
 
     display->setFont(&fonts::FreeSans9pt7b);  // ~14px line height
-    const int QL = 155;    // top of quote area
-    const int LS = 17;     // line spacing
+    const int QL = STATUS_Y - 32;  // 32px above the status line
+    const int LS = 15;             // line spacing (tightened for short displays)
 
     if (threshold < 6) {
         display->fillRect(0, QL, SCREEN_W, LS * 2 + 4, TFT_BLACK);
@@ -177,39 +183,28 @@ void draw_splash(LGFX* display) {
         display->setCursor(24, QL + 13 + LS);
         display->print("    and I must write");
     } else if (threshold < 8) {
-        display->fillRect(0, QL - LS, SCREEN_W, LS * 4 + 4, TFT_BLACK);
+        display->fillRect(0, QL, SCREEN_W, LS * 2 + 4, TFT_BLACK);
         display->setTextColor(TFT_WHITE, TFT_BLACK);
-        display->setCursor(24, QL - LS + 13);
-        display->print("Ever tried. Ever failed.");
-        display->setCursor(24, QL - LS + 13 + LS);
-        display->print(" No matter.");
-        display->setCursor(24, QL - LS + 13 + LS * 2);
-        display->print("Try Again. Fail again.");
-        display->setCursor(24, QL - LS + 13 + LS * 3);
-        display->print(" Fail better.");
+        display->setCursor(24, QL + 13);
+        display->print("Ever tried. Ever failed. No matter.");
+        display->setCursor(24, QL + 13 + LS);
+        display->print("Try again. Fail again. Fail better.");
     } else {
         display->fillRect(0, QL, SCREEN_W, LS * 2 + 4, TFT_BLACK);
         display->setTextColor(TFT_WHITE, TFT_BLACK);
         display->setCursor(24, QL + 13);
-        display->print("Not all those who wander");
-        display->setCursor(24, QL + 13 + LS);
-        display->print("                are lost");
+        display->print("Not all those who wander are lost");
     }
 
     // -----------------------------------------------------------------------
     // Bluetooth logo — lower-right corner, blue
-    // The symbol is a vertical stem with two right-pointing chevrons:
-    //   top → upper-right → mid → lower-right → bottom  (and back through mid)
     // -----------------------------------------------------------------------
     const uint32_t BLUE = 0x5599FF;  // light cornflower blue (RGB888)
     draw_bt_icon(display, BLUE);
 
     // Battery percentage — top-right, small font
-    // Green when charging, red when ≤30% (lower threshold than editor: less
-    // load here so the voltage reading is closer to true state of charge),
-    // white otherwise.  ~ prefix indicates approximate reading under load.
-    int  bat_pct  = axp192_get_battery_pct();
-    bool charging = axp192_is_charging();
+    int  bat_pct  = board_get_battery_pct();
+    bool charging = board_is_charging();
     char bat_str[8];
     if (bat_pct < 0)
         snprintf(bat_str, sizeof(bat_str), charging ? "?%%" : "~?%%");
@@ -225,11 +220,11 @@ void draw_splash(LGFX* display) {
     display->drawString(bat_str, SCREEN_W - 4, 4);
 }
 
-void draw_bt_icon(LGFX* display, uint32_t color) {
-    const int BX = 306;   // stem x
-    const int BY = 216;   // top of logo
+void draw_bt_icon(lgfx::LovyanGFX* display, uint32_t color) {
     const int BH = 16;    // total height
     const int BW = 8;     // arm reach to the right
+    const int BX = (int)display->width()  - 14;  // right edge minus margin
+    const int BY = (int)display->height() - BH - 4;  // near bottom
     const int BM = BY + BH / 2;  // mid y
 
     // Stem

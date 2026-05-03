@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>foowrite-core2 Flasher</title>
+    <script type="module" src="https://unpkg.com/esp-web-tools@10.1.0/dist/web/install-button.js?module"></script>
+  </head>
+  <body style="font-family: sans-serif; padding: 2rem;">
+    <h1>foowrite-core2 &mdash; Waveshare ESP32-S3-Touch-LCD-3.49</h1>
+    <p>Connect the device via USB, then click Install. Use Chrome or Edge.</p>
+    <esp-web-install-button manifest="firmware/manifest.json">
+      <button slot="activate">Install Firmware</button>
+      <span slot="unsupported">Use Chrome or Edge on desktop.</span>
+      <span slot="not-allowed">Must be served from localhost or HTTPS.</span>
+    </esp-web-install-button>
+    <p><small>If connection fails: hold PWR (= BOOT/GPIO0), replug USB, try again.</small></p>
+  </body>
+</html>

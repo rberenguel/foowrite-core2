@@ -12,7 +12,7 @@
 #include "editor_mode.h"
 #include "keymap.h"
 #include "output.hpp"
-#include "axp192.h"
+#include "board.h"
 #include "sd_storage.h"
 
 [[maybe_unused]] static std::string ModeString(EditorMode mode) {
@@ -459,7 +459,7 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
                 command_line_.clear();
 
                 if (command == ":qq") {
-                    axp192_shutdown();
+                    board_shutdown();
                     return;  // unreachable, but tidy
                 }
                 if (command == ":q") {
@@ -479,7 +479,7 @@ void Editor::ProcessKey(const uint8_t key, KeyModifiers* modifiers,
                     if (command.find(":br ") == 0) val = atoi(command.c_str() + 4);
                     else val = atoi(command.c_str() + 12);
                     val = fmax(0, fmin(100, val));
-                    axp192_set_lcd_backlight((val * 255) / 100);
+                    board_set_backlight((val * 255) / 100);
                     output_->CommandLine("brightness set");
                 }
                 if (command.find(":rot ") == 0 || command.find(":rotate ") == 0) {

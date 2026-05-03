@@ -6,8 +6,8 @@
 #include "esp_log.h"
 #include "esp_pm.h"
 
-#include "axp192.h"
-#include "lgfx_config.h"
+#include "board.h"
+#include "display_context.h"
 #include "key_queue.h"
 #include "keymap.h"
 #include "ble_hid_host.h"
@@ -44,7 +44,6 @@ static bool is_repeat_key(uint8_t kc) {
     return false;
 }
 
-LGFX   display;   // extern'd by output.cpp for display rendering
 static Output g_output;
 static Editor g_editor;
 
@@ -76,6 +75,30 @@ static void check_soft_repeat() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// PWR button (GPIO16) — hold 1 s to shut down
+// ---------------------------------------------------------------------------
+static constexpr int64_t PWR_HOLD_MS = 1000;
+
+static void check_pwr_button() {
+    static int64_t s_low_since_ms = 0;
+    static bool    s_armed        = true;
+
+    bool pressed = (gpio_get_level(GPIO_NUM_16) == 0);
+    int64_t now  = esp_timer_get_time() / 1000;
+
+    if (!pressed) {
+        s_low_since_ms = now;
+        s_armed        = true;
+        return;
+    }
+    if (!s_armed) return;
+    if ((now - s_low_since_ms) >= PWR_HOLD_MS) {
+        s_armed = false;
+        board_shutdown();
+    }
+}
+
 // Status updated from BLE task, read from main loop
 static std::atomic<ble_hid_status_t> g_ble_status{BLE_HID_SCANNING};
 
@@ -90,21 +113,24 @@ static void on_ble_status(ble_hid_status_t status) {
 static void apply_config() {
     FooConfig cfg = sd_load_config();
     g_use_qwerty = cfg.qwerty;
-    axp192_set_lcd_backlight((cfg.brightness * 255) / 100);
-    display.setRotation(cfg.rotation == -1 ? 3 : 1);
+    board_set_backlight((cfg.brightness * 255) / 100);
+    display_set_rotation(cfg.rotation == -1 ? 3 : 1);
 }
 
 static void draw_scanning_screen(void) {
-    draw_splash(&display);
+    draw_splash(&display_get());
+    display_commit();
 }
 
 static void draw_connected_screen(void) {
     apply_config();   // re-read config on every connect; :q + reconnect refreshes
-    draw_bt_icon(&display, TFT_GREEN);
+    draw_bt_icon(&display_get(), TFT_GREEN);
+    display_commit();
 
     vTaskDelay(pdMS_TO_TICKS(800));
 
-    display.fillScreen(TFT_BLACK);
+    display_get().fillScreen(TFT_BLACK);
+    display_commit();
     g_editor.Refresh();
 }
 
@@ -123,11 +149,10 @@ extern "C" void app_main(void) {
     esp_pm_configure(&pm);
 
     // 1. Power on peripherals
-    axp192_init(nullptr);
+    board_init();
 
     // 2. Display
-    display.init();
-    display.setRotation(1);
+    display_init();
 
     // 2b. SD card (SPI3_HOST shared with display; must init after display)
     if (!sd_init()) {
@@ -139,13 +164,13 @@ extern "C" void app_main(void) {
     // Skip update when charging — charger elevates voltage artificially.
     {
         float max_mv   = sd_load_bat_max_mv();
-        float cur_mv   = axp192_read_voltage_mv();
-        bool  charging = axp192_is_charging();
+        float cur_mv   = board_read_voltage_mv();
+        bool  charging = board_is_charging();
         ESP_LOGI(TAG, "bat cal: max_mv=%.1f cur_mv=%.1f charging=%d", max_mv, cur_mv, charging);
-        axp192_set_bat_max_mv(max_mv);
+        board_set_bat_max_mv(max_mv);
         if (!charging) {
             if (cur_mv > max_mv) {
-                axp192_set_bat_max_mv(cur_mv);
+                board_set_bat_max_mv(cur_mv);
                 sd_save_bat_max_mv(cur_mv);
                 ESP_LOGI(TAG, "bat cal: saved new max %.1f mV", cur_mv);
             }
@@ -156,7 +181,8 @@ extern "C" void app_main(void) {
 
     apply_config();
 
-    ESP_LOGI(TAG, "Display initialised: %dx%d", (int)display.width(), (int)display.height());
+    ESP_LOGI(TAG, "Display initialised: %dx%d",
+             (int)display_get().width(), (int)display_get().height());
 
     // 3. Key event queue
     g_key_queue = xQueueCreate(KEY_QUEUE_DEPTH, sizeof(key_event_t));
@@ -208,5 +234,8 @@ extern "C" void app_main(void) {
 
         // Synthesise key-repeat for navigation/delete keys
         check_soft_repeat();
+
+        // Power button — 1 s hold shuts down
+        check_pwr_button();
     }
 }

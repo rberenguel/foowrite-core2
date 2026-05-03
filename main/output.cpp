@@ -9,25 +9,23 @@
 #include <list>
 #include <string>
 
-#include "axp192.h"
+#include "board.h"
+#include "display_context.h"
 #include "editor_mode.h"
 #include "esp_timer.h"
-#include "lgfx_config.h"
 #include "splash.h"
 
-extern LGFX display;
-
 // ---------------------------------------------------------------------------
-// Layout
+// Layout — computed from actual display dimensions in Output::Init()
 // ---------------------------------------------------------------------------
-static constexpr int32_t SCREEN_W = 320;
-static constexpr int32_t SCREEN_H = 240;
 static constexpr int32_t TEXT_X   = 3;
 static constexpr int32_t TEXT_Y   = 3;
 static constexpr int32_t STATUS_H = 20;
-static constexpr int32_t STATUS_Y = SCREEN_H - STATUS_H;
-static constexpr int32_t WRAP_W   = SCREEN_W - TEXT_X * 2;
-static constexpr int32_t TEXT_H   = STATUS_Y - TEXT_Y;
+static int32_t SCREEN_W = 320;  // overwritten in Init()
+static int32_t SCREEN_H = 240;
+static int32_t STATUS_Y = 220;
+static int32_t WRAP_W   = 314;
+static int32_t TEXT_H   = 217;
 
 // ---------------------------------------------------------------------------
 // Solarized dark palette — pure black background
@@ -240,15 +238,16 @@ static void draw_status(EditorMode mode, const char* filename, bool dirty) {
         default:
             label = "";         label_col = COL_TEXT;    break;
     }
-    display.setFont(&fonts::DejaVu12);
-    display.setTextSize(1);
-    display.setTextDatum(lgfx::top_left);
-    const int32_t fh = display.fontHeight();
+    auto& disp = display_get();
+    disp.setFont(&fonts::DejaVu12);
+    disp.setTextSize(1);
+    disp.setTextDatum(lgfx::top_left);
+    const int32_t fh = disp.fontHeight();
     const int32_t ty = STATUS_Y + (STATUS_H - fh) / 2;
 
-    display.fillRect(0, STATUS_Y, SCREEN_W, STATUS_H, COL_STATUS_BG);
-    display.setTextColor(label_col, COL_STATUS_BG);
-    display.drawString(label, 4, ty);
+    disp.fillRect(0, STATUS_Y, SCREEN_W, STATUS_H, COL_STATUS_BG);
+    disp.setTextColor(label_col, COL_STATUS_BG);
+    disp.drawString(label, 4, ty);
 
     // Filename + dirty indicator, centred in the available space
     if (filename && filename[0] != '\0') {
@@ -260,16 +259,16 @@ static void draw_status(EditorMode mode, const char* filename, bool dirty) {
         }
         // Truncate to avoid overwriting the battery reading (~36 px from right)
         // Use COL_LABEL_I (blue) when dirty, COL_TEXT otherwise
-        int32_t fw = display.textWidth(fbuf);
+        int32_t fw = disp.textWidth(fbuf);
         int32_t fx = (SCREEN_W - fw) / 2;
         if (fx < 72) fx = 72;  // don't overlap the mode label
-        display.setTextColor(dirty ? COL_LABEL_I : COL_TEXT, COL_STATUS_BG);
-        display.drawString(fbuf, fx, ty);
+        disp.setTextColor(dirty ? COL_LABEL_I : COL_TEXT, COL_STATUS_BG);
+        disp.drawString(fbuf, fx, ty);
     }
 
     // Battery percentage — colour and prefix depend on charging/load state
-    int  bat_pct  = axp192_get_battery_pct();
-    bool charging = axp192_is_charging();
+    int  bat_pct  = board_get_battery_pct();
+    bool charging = board_is_charging();
     char bat_str[16];
     if (bat_pct < 0)
         snprintf(bat_str, sizeof(bat_str), charging ? "?%%" : "~?%%");
@@ -278,10 +277,10 @@ static void draw_status(EditorMode mode, const char* filename, bool dirty) {
     uint32_t bat_col = charging               ? COL_BAT_CHG
                      : (bat_pct >= 0 && bat_pct <= 20) ? COL_BAT_LOW
                                                        : COL_TEXT;
-    display.setFont(&fonts::Font0);
-    display.setTextColor(bat_col, COL_STATUS_BG);
-    display.setTextDatum(lgfx::middle_right);
-    display.drawString(bat_str, SCREEN_W - 4, STATUS_Y + STATUS_H / 2);
+    disp.setFont(&fonts::Font0);
+    disp.setTextColor(bat_col, COL_STATUS_BG);
+    disp.setTextDatum(lgfx::middle_right);
+    disp.drawString(bat_str, SCREEN_W - 4, STATUS_Y + STATUS_H / 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +288,7 @@ static void draw_status(EditorMode mode, const char* filename, bool dirty) {
 // Draws text starting at (0, y) in g, wrapping at WRAP_W.
 // Returns the y-coordinate immediately after the last rendered line.
 // ---------------------------------------------------------------------------
-static int32_t render_context(lgfx::LGFX_Sprite& g, int32_t y, const std::string& t) {
+static int32_t render_context(lgfx::LovyanGFX& g, int32_t y, const std::string& t) {
     const int32_t lh      = g.fontHeight() + 2;
     const int32_t space_w = cw(g, ' ');
 
@@ -364,6 +363,12 @@ int Output::PrevLine() { return prev_line_start_; }
 
 void Output::Init(Editor* ed) {
     editor_ = ed;
+    SCREEN_W = (int32_t)display_get().width();
+    SCREEN_H = (int32_t)display_get().height();
+    STATUS_Y = SCREEN_H - STATUS_H;
+    WRAP_W   = SCREEN_W - TEXT_X * 2;
+    TEXT_H   = STATUS_Y - TEXT_Y;
+
     // Allocate both frame buffers from PSRAM. Both start zeroed, matching the
     // black-filled display. Emit falls back to direct rendering on failure.
     s_buf[0].setColorDepth(16);
@@ -378,69 +383,37 @@ void Output::Init(Editor* ed) {
         s_buf[1].fillSprite(COL_BG);
     }
 
-    display.fillScreen(COL_BG);
+    display_get().fillScreen(COL_BG);
     draw_status(EditorMode::kNormal, "", false);
+    display_commit();
 }
 
 void Output::Emit(const std::string& s, int cursor_pos, EditorMode mode) {
-    if (!s_bufs_ready) {
-        // Fallback: render directly to display (should not happen with 8 MB PSRAM).
-        display.startWrite();
-        render_to(display, TEXT_X, TEXT_Y, s, cursor_pos, mode,
-                  &prev_line_start_, &next_line_start_);
-        display.endWrite();
-        if (editor_) {
-            status_filename_ = editor_->GetFilename();
-            status_dirty_    = editor_->IsDirty();
-        }
-        draw_status(mode, status_filename_.c_str(), status_dirty_);
-        return;
-    }
+    auto& disp = display_get();
 
-    lgfx::LGFX_Sprite& front = s_buf[s_curr];
-    lgfx::LGFX_Sprite& back  = s_buf[1 - s_curr];
-
-    // Render current line into front buffer (pure RAM, no SPI).
-    int32_t used_h = render_to(front, 0, 0, s, cursor_pos, mode,
+    disp.startWrite();
+    int32_t used_h = render_to(disp, TEXT_X, TEXT_Y, s, cursor_pos, mode,
                                &prev_line_start_, &next_line_start_);
 
-    // Fill the screen space below the current line with following document
-    // lines as read-only context.  This replicates the original foowrite
-    // behaviour where a short current line does not leave the screen blank.
     if (editor_ && used_h < TEXT_H) {
-        set_body_font(front);
-        front.setTextColor(COL_TEXT, COL_BG);
-        const int32_t lh = front.fontHeight() + 2;
-        int32_t cy = used_h;
+        set_body_font(disp);
+        disp.setTextColor(COL_TEXT, COL_BG);
+        const int32_t lh = disp.fontHeight() + 2;
+        int32_t cy = TEXT_Y + used_h;
         const int max_ctx = (TEXT_H - used_h) / lh + 1;
         for (const auto& line : editor_->GetFollowingLines(max_ctx)) {
-            if (cy >= TEXT_H) break;
-            cy = render_context(front, cy, line);
+            if (cy >= TEXT_Y + TEXT_H) break;
+            cy = render_context(disp, cy, line);
         }
     }
-
-    // Find the bounding box of pixels that changed vs the previous frame.
-    int32_t dx, dy, dw, dh;
-    bool changed = dirty_rect(
-        (const uint16_t*)front.getBuffer(),
-        (const uint16_t*)back.getBuffer(),
-        WRAP_W, TEXT_H, &dx, &dy, &dw, &dh);
-
-    if (changed) {
-        // Push only the dirty rectangle — setClipRect limits the SPI transfer.
-        display.setClipRect(TEXT_X + dx, TEXT_Y + dy, dw, dh);
-        front.pushSprite(&display, TEXT_X, TEXT_Y);
-        display.clearClipRect();
-    }
-
-    // Swap buffers: front becomes the new "previous frame" reference.
-    s_curr = 1 - s_curr;
+    disp.endWrite();
 
     if (editor_) {
         status_filename_ = editor_->GetFilename();
         status_dirty_    = editor_->IsDirty();
     }
     draw_status(mode, status_filename_.c_str(), status_dirty_);
+    display_commit();
 }
 
 void Output::CommandLine(const std::list<char>& s) {
@@ -449,23 +422,27 @@ void Output::CommandLine(const std::list<char>& s) {
 }
 
 void Output::CommandLine(const std::string& s) {
-    display.setFont(&fonts::DejaVu12);
-    display.setTextSize(1);
-    display.setTextDatum(lgfx::top_left);
-    const int32_t fh = display.fontHeight();
+    auto& disp = display_get();
+    disp.setFont(&fonts::DejaVu12);
+    disp.setTextSize(1);
+    disp.setTextDatum(lgfx::top_left);
+    const int32_t fh = disp.fontHeight();
     const int32_t ty = STATUS_Y + (STATUS_H - fh) / 2;
-    display.fillRect(0, STATUS_Y, SCREEN_W, STATUS_H, COL_STATUS_BG);
-    display.setTextColor(COL_LABEL_C, COL_STATUS_BG);
-    display.drawString(s.c_str(), 4, ty);
+    disp.fillRect(0, STATUS_Y, SCREEN_W, STATUS_H, COL_STATUS_BG);
+    disp.setTextColor(COL_LABEL_C, COL_STATUS_BG);
+    disp.drawString(s.c_str(), 4, ty);
+    display_commit();
 }
 
 void Output::Command(const OutputCommands& cmd) {
     switch (cmd) {
         case OutputCommands::kSplash:
-            draw_splash(&display);
+            draw_splash(&display_get());
+            display_commit();
             break;
         case OutputCommands::kCommandMode:
             draw_status(EditorMode::kNormal, status_filename_.c_str(), status_dirty_);
+            display_commit();
             break;
         case OutputCommands::kFlush:
             break;
@@ -473,8 +450,9 @@ void Output::Command(const OutputCommands& cmd) {
 }
 
 void Output::SetRotation(int rot) {
-    display.setRotation(rot);
-    display.fillScreen(COL_BG);
+    display_set_rotation(rot);
+    display_get().fillScreen(COL_BG);
+    display_commit();
     if (s_bufs_ready) {
         s_buf[1 - s_curr].fillSprite(~COL_BG);
     }
