@@ -38,4 +38,9 @@ class Output {
     // Cached for draw_status calls that happen outside Emit (e.g. ESC to Normal)
     std::string status_filename_;
     bool        status_dirty_ = false;
+
+    // Previous status state — used to skip status redraw when nothing changed
+    EditorMode  last_mode_ = EditorMode::kNormal;
+    std::string last_filename_;
+    bool        last_dirty_ = false;
 };

@@ -23,3 +23,10 @@ void display_commit() {
 void display_commit_partial(int /*x*/, int /*y*/, int /*w*/, int /*h*/) {
     // No-op: same reason as display_commit().
 }
+
+void display_blit(const uint16_t* src,
+                  int src_x, int src_y, int src_w,
+                  int dst_x, int dst_y, int w, int h) {
+    s_display.pushImage(dst_x, dst_y, w, h,
+                        src + src_y * src_w + src_x);
+}

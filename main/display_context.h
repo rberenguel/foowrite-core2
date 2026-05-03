@@ -33,3 +33,16 @@ void display_commit();
 // Waveshare: rotates and pushes only the subset of the framebuffer that changed,
 //            greatly reducing SPI traffic on each keystroke.
 void display_commit_partial(int x, int y, int w, int h);
+
+// Copy a rectangular region from a raw RGB565 buffer into the display canvas.
+// Core2:     draws directly to the hardware display.
+// Waveshare: copies into the software framebuffer (bypasses LovyanGFX colour
+//             conversion, which can corrupt pixels during sprite→sprite blits).
+//  src      – raw uint16_t RGB565 buffer
+//  src_x/y  – top-left corner in src
+//  src_w    – row stride of src (may differ from copy width)
+//  dst_x/y  – top-left corner on the display canvas
+//  w/h      – size of the rectangle to copy
+void display_blit(const uint16_t* src,
+                  int src_x, int src_y, int src_w,
+                  int dst_x, int dst_y, int w, int h);

@@ -1,6 +1,7 @@
 # foowrite-core2
 
-Vim-like editor for the M5Stack Core2, built with ESP-IDF (native C/C++).
+Vim-like editor for the M5Stack Core2 and Waveshare ESP32-S3-Touch-LCD-3.49,
+built with ESP-IDF (native C/C++).
 
 Straight port (via Claude and Gemini) of the original [foowrite](https://github.com/rberenguel/foowrite) I wrote for the Pi Pico.
 
@@ -8,15 +9,27 @@ Straight port (via Claude and Gemini) of the original [foowrite](https://github.
 
 ## Hardware
 
-- M5Stack Core2 (ESP32, ILI9342C 320×240 display, AXP192 PMU)
+**M5Stack Core2** (default build)
+- ESP32, ILI9342C 320×240 display, AXP192 PMU
 - Bluetooth LE keyboard (pairs with any HID keyboard on boot)
 - Micro-SD card for file storage
 
+**Waveshare ESP32-S3-Touch-LCD-3.49**
+- ESP32-S3, AXS15231B 640×172 QSPI display
+- Bluetooth LE keyboard
+- Micro-SD card for file storage
+- Side-mounted power button (1 s hold = power off)
+
 ## Installing a pre-built release
 
-Download the latest `foowrite-core2-VERSION.bin` from the
-[Releases](../../releases) page, then flash it with
-[esptool](https://github.com/espressif/esptool) — no ESP-IDF required.
+Download the correct binary for your board from the [Releases](../../releases)
+page, then flash it with [esptool](https://github.com/espressif/esptool) — no
+ESP-IDF required.
+
+| Board | Binary | `--chip` |
+|---|---|---|
+| M5Stack Core2 | `foowrite-core2-VERSION-core2.bin` | `esp32` |
+| Waveshare ESP32-S3-Touch-LCD-3.49 | `foowrite-core2-VERSION-waveshare349.bin` | `esp32s3` |
 
 **1. Install esptool**
 
@@ -24,9 +37,9 @@ Download the latest `foowrite-core2-VERSION.bin` from the
 pip install esptool
 ```
 
-**2. Find the Core2's serial port**
+**2. Find the serial port**
 
-Plug in the Core2 via USB-C, then:
+Plug in the device via USB-C, then:
 
 ```bash
 # macOS
@@ -39,8 +52,13 @@ ls /dev/ttyUSB*
 **3. Flash**
 
 ```bash
+# M5Stack Core2
 esptool.py --chip esp32 --port /dev/cu.usbserial-XXXX \
-  --baud 921600 write_flash 0x0 foowrite-core2-VERSION.bin
+  --baud 921600 write_flash 0x0 foowrite-core2-VERSION-core2.bin
+
+# Waveshare ESP32-S3-Touch-LCD-3.49
+esptool.py --chip esp32s3 --port /dev/cu.usbserial-XXXX \
+  --baud 921600 write_flash 0x0 foowrite-core2-VERSION-waveshare349.bin
 ```
 
 Replace `/dev/cu.usbserial-XXXX` with the port found above and `VERSION` with
@@ -87,9 +105,14 @@ idf.py -p /dev/cu.usbserial-XXXX flash monitor
 ### Create a release binary
 
 ```bash
-./release.sh
-# writes ~/Downloads/foowrite-core2-VERSION.bin
+./release.sh              # build both board variants
+./release.sh core2        # build only Core2 variant
+./release.sh waveshare349 # build only Waveshare variant
 ```
+
+Binaries are written to `~/Downloads/`.  The script builds each variant in a
+separate directory (`build/` and `build_waveshare349/`) so you can switch
+between them without a clean rebuild.
 
 ### Run tests (host, no device needed)
 

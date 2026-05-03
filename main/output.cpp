@@ -383,37 +383,101 @@ void Output::Init(Editor* ed) {
         s_buf[1].fillSprite(COL_BG);
     }
 
+    last_mode_ = EditorMode::kNormal;
+    last_filename_.clear();
+    last_dirty_ = false;
+
     display_get().fillScreen(COL_BG);
     draw_status(EditorMode::kNormal, "", false);
     display_commit();
 }
 
 void Output::Emit(const std::string& s, int cursor_pos, EditorMode mode) {
-    auto& disp = display_get();
-
-    disp.startWrite();
-    int32_t used_h = render_to(disp, TEXT_X, TEXT_Y, s, cursor_pos, mode,
-                               &prev_line_start_, &next_line_start_);
-
-    if (editor_ && used_h < TEXT_H) {
-        set_body_font(disp);
-        disp.setTextColor(COL_TEXT, COL_BG);
-        const int32_t lh = disp.fontHeight() + 2;
-        int32_t cy = TEXT_Y + used_h;
-        const int max_ctx = (TEXT_H - used_h) / lh + 1;
-        for (const auto& line : editor_->GetFollowingLines(max_ctx)) {
-            if (cy >= TEXT_Y + TEXT_H) break;
-            cy = render_context(disp, cy, line);
-        }
-    }
-    disp.endWrite();
-
     if (editor_) {
         status_filename_ = editor_->GetFilename();
         status_dirty_    = editor_->IsDirty();
     }
-    draw_status(mode, status_filename_.c_str(), status_dirty_);
-    display_commit();
+
+    const bool status_changed = (mode != last_mode_)
+                             || (status_filename_ != last_filename_)
+                             || (status_dirty_ != last_dirty_);
+
+    if (!s_bufs_ready) {
+        // Fallback: direct render to canvas (Core2 path or PSRAM exhaustion).
+        auto& disp = display_get();
+        disp.startWrite();
+        int32_t used_h = render_to(disp, TEXT_X, TEXT_Y, s, cursor_pos, mode,
+                                   &prev_line_start_, &next_line_start_);
+        if (editor_ && used_h < TEXT_H) {
+            set_body_font(disp);
+            disp.setTextColor(COL_TEXT, COL_BG);
+            const int32_t lh = disp.fontHeight() + 2;
+            int32_t cy = TEXT_Y + used_h;
+            const int max_ctx = (TEXT_H - used_h) / lh + 1;
+            for (const auto& line : editor_->GetFollowingLines(max_ctx)) {
+                if (cy >= TEXT_Y + TEXT_H) break;
+                cy = render_context(disp, cy, line);
+            }
+        }
+        disp.endWrite();
+        draw_status(mode, status_filename_.c_str(), status_dirty_);
+        display_commit();
+        last_mode_ = mode;
+        last_filename_ = status_filename_;
+        last_dirty_ = status_dirty_;
+        return;
+    }
+
+    // Sprite path: render text off-screen, diff against previous frame,
+    // and commit only the bounding box of changed pixels.
+    lgfx::LGFX_Sprite& tgt = s_buf[s_curr];
+    int32_t used_h = render_to(tgt, 0, 0, s, cursor_pos, mode,
+                               &prev_line_start_, &next_line_start_);
+
+    if (editor_ && used_h < TEXT_H) {
+        set_body_font(tgt);
+        tgt.setTextColor(COL_TEXT, COL_BG);
+        const int32_t lh = tgt.fontHeight() + 2;
+        int32_t cy = used_h;
+        const int max_ctx = (TEXT_H - used_h) / lh + 1;
+        for (const auto& line : editor_->GetFollowingLines(max_ctx)) {
+            if (cy >= TEXT_H) break;
+            cy = render_context(tgt, cy, line);
+        }
+    }
+
+    // Diff current sprite against previous sprite to find the dirty rectangle.
+    int32_t ox = 0, oy = 0, ow = 0, oh = 0;
+    lgfx::LGFX_Sprite& prev = s_buf[1 - s_curr];
+    const bool text_dirty = dirty_rect(
+        static_cast<const uint16_t*>(tgt.getBuffer()),
+        static_cast<const uint16_t*>(prev.getBuffer()),
+        WRAP_W, TEXT_H,
+        &ox, &oy, &ow, &oh);
+
+    if (text_dirty) {
+        const uint16_t* src_buf = static_cast<const uint16_t*>(tgt.getBuffer());
+        display_blit(src_buf, ox, oy, WRAP_W,
+                     TEXT_X + ox, TEXT_Y + oy, ow, oh);
+    }
+
+    if (status_changed) {
+        draw_status(mode, status_filename_.c_str(), status_dirty_);
+        last_mode_ = mode;
+        last_filename_ = status_filename_;
+        last_dirty_ = status_dirty_;
+    }
+
+    // Full-screen commit: the AXS15231B driver only works reliably for
+    // full-screen draws (no RASET).  Only changed canvas pixels were
+    // updated via display_blit above, so unchanged pixels rewrite the same
+    // values — no visual flicker.
+    if (text_dirty || status_changed) {
+        display_commit();
+    }
+
+    // Swap buffers: tgt becomes the "previous" frame for next diff.
+    s_curr = 1 - s_curr;
 }
 
 void Output::CommandLine(const std::list<char>& s) {
@@ -432,6 +496,7 @@ void Output::CommandLine(const std::string& s) {
     disp.setTextColor(COL_LABEL_C, COL_STATUS_BG);
     disp.drawString(s.c_str(), 4, ty);
     display_commit();
+    last_mode_ = EditorMode::kCommandLineMode;
 }
 
 void Output::Command(const OutputCommands& cmd) {
@@ -443,6 +508,7 @@ void Output::Command(const OutputCommands& cmd) {
         case OutputCommands::kCommandMode:
             draw_status(EditorMode::kNormal, status_filename_.c_str(), status_dirty_);
             display_commit();
+            last_mode_ = EditorMode::kNormal;
             break;
         case OutputCommands::kFlush:
             break;
@@ -454,8 +520,12 @@ void Output::SetRotation(int rot) {
     display_get().fillScreen(COL_BG);
     display_commit();
     if (s_bufs_ready) {
-        s_buf[1 - s_curr].fillSprite(~COL_BG);
+        s_buf[0].fillSprite(COL_BG);
+        s_buf[1].fillSprite(COL_BG);
     }
+    last_mode_ = EditorMode::kNormal;
+    last_filename_.clear();
+    last_dirty_ = false;
 }
 
 void Output::ProcessHandlers() {}
