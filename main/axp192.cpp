@@ -14,16 +14,16 @@ static i2c_master_dev_handle_t s_dev = NULL;
 
 static esp_err_t axp_write(uint8_t reg, uint8_t val) {
     uint8_t buf[2] = {reg, val};
-    return i2c_master_transmit(s_dev, buf, sizeof(buf), pdMS_TO_TICKS(10));
+    return i2c_master_transmit(s_dev, buf, sizeof(buf), pdMS_TO_TICKS(100));
 }
 
 static esp_err_t axp_read(uint8_t reg, uint8_t *val) {
-    return i2c_master_transmit_receive(s_dev, &reg, 1, val, 1, pdMS_TO_TICKS(10));
+    return i2c_master_transmit_receive(s_dev, &reg, 1, val, 1, pdMS_TO_TICKS(100));
 }
 
 static esp_err_t axp_read32(uint8_t reg, uint32_t *val) {
     uint8_t buf[4];
-    esp_err_t err = i2c_master_transmit_receive(s_dev, &reg, 1, buf, 4, pdMS_TO_TICKS(10));
+    esp_err_t err = i2c_master_transmit_receive(s_dev, &reg, 1, buf, 4, pdMS_TO_TICKS(100));
     if (err != ESP_OK) return err;
     *val = ((uint32_t)buf[0] << 24) | ((uint32_t)buf[1] << 16) |
            ((uint32_t)buf[2] << 8)  |  (uint32_t)buf[3];

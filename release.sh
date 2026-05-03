@@ -33,64 +33,44 @@ package_variant() {
     local bin_boot="$build_dir/bootloader/bootloader.bin"
     local bin_part="$build_dir/partition_table/partition-table.bin"
 
-    # If the build dir exists, verify it was built for the right chip.
-    # Wrong target → wipe and rebuild.  Right target but missing binary
-    # → build.  Right target with binary → reuse.
-    local need_build=false
-    if [ -d "$build_dir" ] && [ -f "$build_dir/project_description.json" ]; then
-        local cached_target
-        cached_target=$(python3 -c "import sys,json; d=json.load(open('$build_dir/project_description.json')); print(d.get('target',''))" 2>/dev/null || true)
-        if [ "$cached_target" != "$chip" ]; then
-            echo "Target mismatch in $build_dir ($cached_target != $chip), cleaning..."
-            rm -rf "$build_dir"
-            need_build=true
-        elif [ ! -f "$bin_core" ]; then
-            need_build=true
-        fi
-    else
-        need_build=true
+    # Always rebuild from scratch.  Reuse logic caused target-mismatch
+    # bugs when switching between esp32 and esp32s3.
+    echo ""
+    echo "=== Building $board variant ==="
+
+    # ESP-IDF stores the target inside sdkconfig.  Save the developer's
+    # copy, wipe the project-level sdkconfig, and let the build generate
+    # a fresh one for $chip.
+    local sdkconfig_backup=""
+    if [ -f "$SCRIPT_DIR/sdkconfig" ]; then
+        sdkconfig_backup=$(mktemp)
+        cp "$SCRIPT_DIR/sdkconfig" "$sdkconfig_backup"
     fi
 
-    if [ "$need_build" = false ]; then
-        echo "Using existing build: $build_dir"
-    else
-        echo ""
-        echo "=== Building $board variant ==="
-
-        # ESP-IDF stores the target inside sdkconfig.  We must remove it
-        # so CMake generates a fresh one for $chip.  Save the developer's
-        # copy first and restore it after the build.
-        local sdkconfig_backup=""
-        if [ -f "$SCRIPT_DIR/sdkconfig" ]; then
-            sdkconfig_backup=$(mktemp)
-            cp "$SCRIPT_DIR/sdkconfig" "$sdkconfig_backup"
-            rm -f "$SCRIPT_DIR/sdkconfig"
+    # Ensure cleanup runs even if the build fails.
+    restore_sdkconfig() {
+        if [ -n "${sdkconfig_backup:-}" ] && [ -f "$sdkconfig_backup" ]; then
+            mv "$sdkconfig_backup" "$SCRIPT_DIR/sdkconfig"
         fi
+    }
+    trap restore_sdkconfig EXIT
 
-        # Ensure cleanup runs even if the build fails.
-        restore_sdkconfig() {
-            if [ -n "${sdkconfig_backup:-}" ] && [ -f "$sdkconfig_backup" ]; then
-                mv "$sdkconfig_backup" "$SCRIPT_DIR/sdkconfig"
-            fi
-        }
-        trap restore_sdkconfig EXIT
+    # Wipe build dir + sdkconfig so IDF_TARGET is picked up reliably.
+    rm -rf "$build_dir"
+    rm -f "$SCRIPT_DIR/sdkconfig" "$SCRIPT_DIR/sdkconfig.old"
 
-        # Set target first (regenerates sdkconfig + bootloader for this chip)
-        idf.py -B "$build_dir" set-target "$chip"
+    # Build with explicit target and board-specific defines.
+    local cmake_args=""
+    [ "$board" = "waveshare349" ] && cmake_args="-DFOOWRITE_BOARD=waveshare349"
+    idf.py -B "$build_dir" -DIDF_TARGET="$chip" $cmake_args build
 
-        # Build with board-specific defines
-        local cmake_args=""
-        [ "$board" = "waveshare349" ] && cmake_args="-DFOOWRITE_BOARD=waveshare349"
-        idf.py -B "$build_dir" $cmake_args build
-
-        # Save the generated sdkconfig for future release builds of this board.
-        if [ -f "$SCRIPT_DIR/sdkconfig" ]; then
-            cp "$SCRIPT_DIR/sdkconfig" "$SCRIPT_DIR/sdkconfig.$board"
-        fi
-
-        restore_sdkconfig
-        trap - EXIT
+    # Save the generated sdkconfig for future release builds of this board.
+    if [ -f "$SCRIPT_DIR/sdkconfig" ]; then
+        cp "$SCRIPT_DIR/sdkconfig" "$SCRIPT_DIR/sdkconfig.$board"
     fi
+
+    restore_sdkconfig
+    trap - EXIT
 
     # Sanity checks
     for f in "$bin_boot" "$bin_part" "$bin_core"; do

@@ -18,14 +18,9 @@ CONFIG_SPIRAM_USE_MALLOC=y
 # FreeRTOS tick rate — 100Hz is sufficient; 1kHz prevents light-sleep and wastes power
 CONFIG_FREERTOS_HZ=100
 
-# CPU & power management
-# 80MHz is more than sufficient for BLE HID + text rendering
+# CPU frequency — 80MHz is more than sufficient for BLE HID + text rendering
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=80
-# Enable PM so esp_pm_configure can engage automatic light-sleep between ticks
-CONFIG_PM_ENABLE=y
-# Required for light sleep with NimBLE
-CONFIG_BT_NIMBLE_SLEEP_ENABLE=y
 
 # Stack sizes
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192

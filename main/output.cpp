@@ -402,8 +402,11 @@ void Output::Emit(const std::string& s, int cursor_pos, EditorMode mode) {
                              || (status_filename_ != last_filename_)
                              || (status_dirty_ != last_dirty_);
 
-    if (!s_bufs_ready) {
-        // Fallback: direct render to canvas (Core2 path or PSRAM exhaustion).
+#ifndef FOOWRITE_BOARD_WAVESHARE349
+    // Core2 path: direct render to the hardware display.  The sprite path
+    // is not needed here (LovyanGFX writes pixels immediately over SPI),
+    // and display_blit via pushImage corrupts pixels on the ILI9342C.
+    {
         auto& disp = display_get();
         disp.startWrite();
         int32_t used_h = render_to(disp, TEXT_X, TEXT_Y, s, cursor_pos, mode,
@@ -421,15 +424,14 @@ void Output::Emit(const std::string& s, int cursor_pos, EditorMode mode) {
         }
         disp.endWrite();
         draw_status(mode, status_filename_.c_str(), status_dirty_);
-        display_commit();
         last_mode_ = mode;
         last_filename_ = status_filename_;
         last_dirty_ = status_dirty_;
-        return;
     }
-
-    // Sprite path: render text off-screen, diff against previous frame,
-    // and commit only the bounding box of changed pixels.
+#else
+    // Waveshare path: render off-screen to a sprite, diff against the
+    // previous frame, and blit only the dirty rectangle.  This avoids the
+    // cost of a full 640×172 SPI transfer on every keystroke.
     lgfx::LGFX_Sprite& tgt = s_buf[s_curr];
     int32_t used_h = render_to(tgt, 0, 0, s, cursor_pos, mode,
                                &prev_line_start_, &next_line_start_);
@@ -446,7 +448,6 @@ void Output::Emit(const std::string& s, int cursor_pos, EditorMode mode) {
         }
     }
 
-    // Diff current sprite against previous sprite to find the dirty rectangle.
     int32_t ox = 0, oy = 0, ow = 0, oh = 0;
     lgfx::LGFX_Sprite& prev = s_buf[1 - s_curr];
     const bool text_dirty = dirty_rect(
@@ -469,15 +470,14 @@ void Output::Emit(const std::string& s, int cursor_pos, EditorMode mode) {
     }
 
     // Full-screen commit: the AXS15231B driver only works reliably for
-    // full-screen draws (no RASET).  Only changed canvas pixels were
-    // updated via display_blit above, so unchanged pixels rewrite the same
-    // values — no visual flicker.
+    // full-screen draws.  Only changed canvas pixels were updated via
+    // display_blit above, so unchanged pixels rewrite the same values.
     if (text_dirty || status_changed) {
         display_commit();
     }
 
-    // Swap buffers: tgt becomes the "previous" frame for next diff.
     s_curr = 1 - s_curr;
+#endif
 }
 
 void Output::CommandLine(const std::list<char>& s) {
